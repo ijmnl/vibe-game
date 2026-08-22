@@ -18,6 +18,7 @@ const CONFIG = {
     // Encounter settings
     ENCOUNTER_RATE: 0.02, // 2% chance per frame in tall grass/water
     ENCOUNTER_COOLDOWN: 1000, // 1 second cooldown between encounters
+    ENCOUNTER_RATE_SCALE: 15, // Converts a zone's per-step rate into a per-second chance
     
     // Battle settings
     MAX_MONSTERS_IN_TEAM: 3,

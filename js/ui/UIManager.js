@@ -17,12 +17,15 @@ class UIManager {
         this.battleLogElement = document.getElementById('battle-log');
         this.monsterList = document.getElementById('monster-list');
         this.itemList = document.getElementById('item-list');
-        
+        this.battleItems = document.getElementById('battle-items');
+        this.battleItemList = document.getElementById('battle-item-list');
+
         // Buttons
         this.attackBtn = document.getElementById('attack-btn');
         this.catchBtn = document.getElementById('catch-btn');
         this.runBtn = document.getElementById('run-btn');
         this.useItemBtn = document.getElementById('use-item-btn');
+        this.cancelItemBtn = document.getElementById('cancel-item-btn');
         this.closeMenuBtn = document.getElementById('close-menu-btn');
         
         // Setup event listeners
@@ -47,9 +50,16 @@ class UIManager {
             this.showItemSelection();
         });
 
+        this.cancelItemBtn.addEventListener('click', () => {
+            this.hideItemSelection();
+        });
+
         this.closeMenuBtn.addEventListener('click', () => {
             this.hideMenu();
         });
+
+        // On-screen menu button (touch devices)
+        touchControls.onMenu = () => this.toggleMenu();
 
         // Listen for scene events
         this.scene.events.on('battle-start', (data) => {
@@ -90,12 +100,8 @@ class UIManager {
 
         // Keyboard listener for menu
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' || e.key === 'm') {
-                if (this.menuUI.classList.contains('hidden')) {
-                    this.showMenu();
-                } else {
-                    this.hideMenu();
-                }
+            if (e.key === 'Escape' || e.key === 'm' || e.key === 'M') {
+                this.toggleMenu();
             }
         });
     }
@@ -103,6 +109,8 @@ class UIManager {
     // Show battle UI
     showBattleUI(data) {
         this.battleUI.classList.remove('hidden');
+        this.hideItemSelection();
+        this.setWorldHudVisible(false);
         this.updateBattleUI(data);
     }
 
@@ -110,6 +118,31 @@ class UIManager {
     hideBattleUI() {
         this.battleUI.classList.add('hidden');
         this.hideItemSelection();
+        this.setWorldHudVisible(true);
+    }
+
+    // The battle panel fills a phone screen; hide the overworld HUD behind it
+    setWorldHudVisible(visible) {
+        const hud = [
+            document.getElementById('minimap-container'),
+            document.getElementById('player-stats'),
+            document.getElementById('touch-controls')
+        ];
+
+        hud.forEach((element) => {
+            if (!element) return;
+            // The touch pad stays hidden entirely on non-touch devices
+            if (element.id === 'touch-controls' && !TouchControls.isTouchDevice()) return;
+            element.classList.toggle('hidden', !visible);
+        });
+    }
+
+    toggleMenu() {
+        if (this.menuUI.classList.contains('hidden')) {
+            this.showMenu();
+        } else {
+            this.hideMenu();
+        }
     }
 
     // Update battle UI
@@ -292,7 +325,7 @@ class UIManager {
             itemElement.className = 'item-item';
             itemElement.innerHTML = `
                 <span>${item.name} x${item.quantity}</span>
-                <span>${item.description}</span>
+                <span class="item-description">${item.description}</span>
             `;
             
             // Add click handler to use item
@@ -317,31 +350,53 @@ class UIManager {
         });
     }
 
-    // Show item selection in battle
+    // Show the in-battle item picker
     showItemSelection() {
-        this.itemList.style.display = 'block';
+        const items = this.scene.player.getInventory()
+            .getAllItems()
+            .filter(item => item.type === 'heal');
+
+        this.battleItemList.innerHTML = '';
+
+        if (items.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'item-item';
+            empty.textContent = 'No usable items';
+            this.battleItemList.appendChild(empty);
+        }
+
+        items.forEach(item => {
+            const itemElement = document.createElement('div');
+            itemElement.className = 'item-item';
+            itemElement.innerHTML = `
+                <span>${item.name} x${item.quantity}</span>
+                <span class="item-description">${item.description}</span>
+            `;
+
+            itemElement.addEventListener('click', () => {
+                this.hideItemSelection();
+                this.scene.events.emit('battle-action', {
+                    action: 'use-item',
+                    item: item.name
+                });
+            });
+
+            this.battleItemList.appendChild(itemElement);
+        });
+
+        this.battleItems.classList.remove('hidden');
     }
 
     // Hide item selection
     hideItemSelection() {
-        this.itemList.style.display = '';
+        this.battleItems.classList.add('hidden');
     }
 
     // Show message
     showMessage(message, duration = 2000) {
         // Create temporary message element
         const messageElement = document.createElement('div');
-        messageElement.style.position = 'absolute';
-        messageElement.style.top = '50%';
-        messageElement.style.left = '50%';
-        messageElement.style.transform = 'translate(-50%, -50%)';
-        messageElement.style.background = 'rgba(0, 0, 0, 0.8)';
-        messageElement.style.color = '#fff';
-        messageElement.style.padding = '20px';
-        messageElement.style.borderRadius = '8px';
-        messageElement.style.fontFamily = 'Press Start 2P, cursive';
-        messageElement.style.fontSize = '14px';
-        messageElement.style.zIndex = '1000';
+        messageElement.className = 'game-message';
         messageElement.textContent = message;
         
         document.body.appendChild(messageElement);

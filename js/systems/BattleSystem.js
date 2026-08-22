@@ -1,6 +1,9 @@
 class BattleSystem {
     constructor(scene) {
         this.scene = scene;
+        // Turn delays must be scheduled on a scene that is actually running.
+        // The world scene is paused during a battle, so its clock is frozen.
+        this.timerScene = scene;
         this.player = null;
         this.wildMonster = null;
         this.isBattleActive = false;
@@ -11,7 +14,8 @@ class BattleSystem {
     }
 
     // Start a battle
-    startBattle(player, wildMonster) {
+    startBattle(player, wildMonster, timerScene = this.scene) {
+        this.timerScene = timerScene;
         this.player = player;
         this.wildMonster = wildMonster;
         this.isBattleActive = true;
@@ -78,6 +82,11 @@ class BattleSystem {
                 return { success: false, reason: 'Invalid action' };
         }
 
+        // A successful catch or escape already ended the battle
+        if (!this.isBattleActive) {
+            return result;
+        }
+
         if (result.success) {
             // Check if battle should continue
             if (!this.checkBattleEnd()) {
@@ -86,7 +95,7 @@ class BattleSystem {
                 this.scene.events.emit('battle-turn-change', { turn: this.turn });
                 
                 // Start enemy turn after a short delay
-                this.scene.time.delayedCall(1000, () => {
+                this.timerScene.time.delayedCall(1000, () => {
                     if (this.isBattleActive) {
                         this.enemyTurn();
                     }
@@ -173,7 +182,7 @@ class BattleSystem {
         });
         
         // Wait for animation
-        await new Promise(resolve => this.scene.time.delayedCall(1500, resolve));
+        await new Promise(resolve => this.timerScene.time.delayedCall(1500, resolve));
         
         if (success) {
             // Catch successful
@@ -201,10 +210,10 @@ class BattleSystem {
             this.addToLog(`Oh no! The wild ${this.wildMonster.name} broke free!`);
             
             // Wild monster attacks after breaking free
-            if (this.wildMonster.isAlive()) {
-                const damage = this.wildMonster.getAttackDamage();
-                playerMonster.takeDamage(damage, this.wildMonster);
-                this.addToLog(`Wild ${this.wildMonster.name} attacked! ${playerMonster.name} took ${damage} damage!`);
+            const playerMonster = this.player.getCurrentMonster();
+            if (this.wildMonster.isAlive() && playerMonster) {
+                const dealt = playerMonster.takeDamage(this.wildMonster.getAttackDamage());
+                this.addToLog(`Wild ${this.wildMonster.name} attacked! ${playerMonster.name} took ${dealt} damage!`);
             }
             
             return { success: false, reason: 'Monster broke free' };
@@ -230,11 +239,10 @@ class BattleSystem {
             return { success: true, escaped: true };
         } else {
             this.addToLog(`Couldn't escape!`);
-            
+
             // Wild monster attacks after failed escape
-            const damage = this.wildMonster.getAttackDamage();
-            playerMonster.takeDamage(damage, this.wildMonster);
-            this.addToLog(`Wild ${this.wildMonster.name} attacked! ${playerMonster.name} took ${damage} damage!`);
+            const dealt = playerMonster.takeDamage(this.wildMonster.getAttackDamage());
+            this.addToLog(`Wild ${this.wildMonster.name} attacked! ${playerMonster.name} took ${dealt} damage!`);
             
             return { success: false, reason: 'Failed to escape' };
         }
@@ -260,9 +268,7 @@ class BattleSystem {
                     return { success: false, reason: 'No monster to heal' };
                 }
                 
-                const oldHp = playerMonster.hp;
-                playerMonster.hp = Math.min(playerMonster.maxHp, playerMonster.hp + item.value);
-                const healed = playerMonster.hp - oldHp;
+                const healed = playerMonster.heal(item.value);
                 
                 inventory.removeItem(itemName, 1);
                 
@@ -323,6 +329,10 @@ class BattleSystem {
 
     // Check if battle should end
     checkBattleEnd() {
+        if (!this.isBattleActive || !this.player) {
+            return true;
+        }
+
         const playerMonster = this.player.getCurrentMonster();
         
         // Check if wild monster is defeated
@@ -348,18 +358,13 @@ class BattleSystem {
     endBattle(result) {
         this.isBattleActive = false;
         
-        // Clean up
-        if (this.wildMonster) {
-            this.wildMonster.destroy();
-            this.wildMonster = null;
-        }
-
         this.scene.events.emit('battle-end', {
             result: result,
             player: this.player
         });
 
         // Reset state
+        this.wildMonster = null;
         this.player = null;
         this.turn = 'player';
         this.catchAttempts = 0;
@@ -407,12 +412,12 @@ class BattleSystem {
             this.turn = 'enemy';
             this.scene.events.emit('battle-turn-change', { turn: this.turn });
             
-            this.scene.time.delayedCall(1000, () => {
+            this.timerScene.time.delayedCall(1000, () => {
                 if (this.isBattleActive) {
                     this.enemyTurn();
                 }
             });
-            
+
             return true;
         }
         return false;

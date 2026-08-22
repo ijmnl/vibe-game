@@ -1,4 +1,7 @@
 class WorldGenerator {
+    // Number of shade variants rendered per tile type in the tileset
+    static TILE_VARIANTS = 4;
+
     constructor() {
         this.worldWidth = CONFIG.WORLD_WIDTH;
         this.worldHeight = CONFIG.WORLD_HEIGHT;
@@ -116,6 +119,8 @@ class WorldGenerator {
                     type: tileType,
                     zone: zoneType,
                     color: variation,
+                    // Which of the pre-rendered shade variants this tile uses
+                    variant: Math.floor(Math.random() * WorldGenerator.TILE_VARIANTS),
                     collision: false
                 };
             }
@@ -226,10 +231,18 @@ class WorldGenerator {
 
     // Check if position is collidable
     isCollidable(x, y) {
-        if (x < 0 || x >= this.worldWidth || y < 0 || y >= this.worldHeight) {
+        const tileX = Math.floor(x);
+        const tileY = Math.floor(y);
+
+        if (!Number.isFinite(tileX) || !Number.isFinite(tileY)) {
             return true;
         }
-        return this.collisionMap[Math.floor(y)][Math.floor(x)] || false;
+
+        if (tileX < 0 || tileX >= this.worldWidth || tileY < 0 || tileY >= this.worldHeight) {
+            return true;
+        }
+
+        return this.collisionMap[tileY][tileX] || false;
     }
 
     // Get tile at position

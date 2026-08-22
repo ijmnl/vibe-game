@@ -7,11 +7,9 @@ class Player {
         this.direction = 'down';
         this.isMoving = false;
         this.sprite = null;
-        this.collisionBox = null;
         this.monsters = [];
         this.currentMonsterIndex = 0;
         this.inventory = new Inventory();
-        this.lastEncounterTime = 0;
         
         // Create player sprite
         this.createSprite();
@@ -37,37 +35,16 @@ class Player {
             CONFIG.COLORS.player
         );
         
-        // Create collision box (slightly smaller than sprite)
-        this.collisionBox = this.scene.add.rectangle(
-            this.x, 
-            this.y, 
-            CONFIG.TILE_SIZE * 0.8, 
-            CONFIG.TILE_SIZE * 0.8, 
-            0x00ff00, 
-            0.3
-        );
-        
         // Center the origin
         this.sprite.setOrigin(0.5, 0.5);
-        this.collisionBox.setOrigin(0.5, 0.5);
-        
+
         // Set depth so player is above world but below UI
         this.sprite.setDepth(10);
-        this.collisionBox.setDepth(10);
     }
 
-    update(delta) {
-        // Handle movement
-        if (this.isMoving) {
-            // Movement is handled by the input system
-        }
-        
-        // Check for encounters
-        this.checkEncounters(delta);
-        
-        // Update collision box position
-        this.collisionBox.x = this.sprite.x;
-        this.collisionBox.y = this.sprite.y;
+    update() {
+        // Movement is driven by the scene's input handling; encounters are
+        // rolled by EncounterSystem. Nothing to do per-frame right now.
     }
 
     // Move player in a direction
@@ -122,42 +99,6 @@ class Player {
         return world.isCollidable(tileX, tileY);
     }
 
-    // Check for random encounters
-    checkEncounters(delta) {
-        const now = this.scene.time.now;
-        
-        // Check cooldown
-        if (now - this.lastEncounterTime < CONFIG.ENCOUNTER_COOLDOWN) {
-            return;
-        }
-        
-        // Get current tile
-        const tileX = Math.floor(this.sprite.x / CONFIG.TILE_SIZE);
-        const tileY = Math.floor(this.sprite.y / CONFIG.TILE_SIZE);
-        const tile = this.scene.worldGenerator.getTileAt(tileX, tileY);
-        
-        if (!tile) return;
-        
-        // Only trigger encounters in certain zones
-        const zone = CONFIG.ZONES[tile.zone];
-        if (!zone || !zone.encounterRate) return;
-        
-        // Check if moving
-        if (!this.isMoving) return;
-        
-        // Random chance for encounter
-        if (Math.random() < zone.encounterRate) {
-            this.lastEncounterTime = now;
-            this.isMoving = false;
-            
-            // Trigger encounter
-            this.scene.events.emit('encounter-start', {
-                player: this,
-                zone: tile.zone
-            });
-        }
-    }
-
     // Stop moving
     stopMoving() {
         this.isMoving = false;
@@ -169,21 +110,7 @@ class Player {
             return false; // Team is full
         }
         
-        const stats = getMonsterStats(name);
-        const monster = {
-            name: name,
-            level: level,
-            maxHp: Math.floor(stats.hp * (1 + level * 0.2)),
-            hp: Math.floor(stats.hp * (1 + level * 0.2)),
-            attack: Math.floor(stats.attack * (1 + level * 0.15)),
-            defense: Math.floor(stats.defense * (1 + level * 0.1)),
-            speed: Math.floor(stats.speed * (1 + level * 0.05)),
-            exp: 0,
-            expToLevel: Math.floor(stats.exp * 1.5),
-            type: this.getRandomType()
-        };
-        
-        this.monsters.push(monster);
+        this.monsters.push(new Monster(name, level));
         return true;
     }
 
@@ -223,41 +150,27 @@ class Player {
     // Heal current monster
     healMonster(amount) {
         const monster = this.getCurrentMonster();
-        if (monster) {
-            monster.hp = Math.min(monster.hp + amount, monster.maxHp);
-            return true;
-        }
-        return false;
+        if (!monster) return false;
+
+        monster.heal(amount);
+        return true;
     }
 
     // Add EXP to current monster
     addExp(amount) {
         const monster = this.getCurrentMonster();
-        if (monster) {
-            monster.exp += amount;
-            
-            // Check for level up
-            if (monster.exp >= monster.expToLevel) {
-                monster.level++;
-                monster.exp -= monster.expToLevel;
-                monster.expToLevel = Math.floor(monster.expToLevel * 1.3);
-                
-                // Increase stats
-                monster.maxHp = Math.floor(monster.maxHp * 1.1);
-                monster.hp = monster.maxHp;
-                monster.attack = Math.floor(monster.attack * 1.1);
-                monster.defense = Math.floor(monster.defense * 1.05);
-                monster.speed = Math.floor(monster.speed * 1.03);
-                
-                this.scene.events.emit('monster-levelup', {
-                    monster: monster,
-                    player: this
-                });
-                
-                return true; // Level up occurred
-            }
+        if (!monster) return false;
+
+        const leveledUp = monster.addExp(amount);
+
+        if (leveledUp) {
+            this.scene.events.emit('monster-levelup', {
+                monster: monster,
+                player: this
+            });
         }
-        return false;
+
+        return leveledUp;
     }
 
     // Catch a new monster
@@ -266,22 +179,15 @@ class Player {
             return { success: false, reason: 'Team is full' };
         }
         
-        // Add the monster to team
-        const newMonster = {
-            name: monsterData.name,
-            level: monsterData.level,
-            maxHp: monsterData.maxHp,
-            hp: Math.floor(monsterData.maxHp * 0.5), // Start with half HP
-            attack: monsterData.attack,
-            defense: monsterData.defense,
-            speed: monsterData.speed,
-            exp: 0,
-            expToLevel: monsterData.expToLevel || Math.floor(getMonsterStats(monsterData.name).exp * 1.5),
-            type: monsterData.type || this.getRandomType()
-        };
-        
+        // A caught monster joins the team at half HP
+        const newMonster = Monster.fromData({
+            ...monsterData,
+            hp: Math.floor(monsterData.maxHp * 0.5),
+            exp: 0
+        });
+
         this.monsters.push(newMonster);
-        
+
         return { success: true, monster: newMonster };
     }
 
@@ -320,7 +226,7 @@ class Player {
         return {
             x: this.sprite.x,
             y: this.sprite.y,
-            monsters: this.monsters,
+            monsters: this.monsters.map(monster => monster.getSaveData()),
             currentMonsterIndex: this.currentMonsterIndex,
             inventory: this.inventory.getSaveData()
         };
@@ -330,7 +236,9 @@ class Player {
     loadSaveData(data) {
         this.sprite.x = data.x || this.sprite.x;
         this.sprite.y = data.y || this.sprite.y;
-        this.monsters = data.monsters || this.monsters;
+        if (Array.isArray(data.monsters) && data.monsters.length > 0) {
+            this.monsters = data.monsters.map(monster => Monster.fromData(monster));
+        }
         this.currentMonsterIndex = data.currentMonsterIndex || 0;
         this.inventory.loadSaveData(data.inventory || {});
     }

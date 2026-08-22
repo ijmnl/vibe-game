@@ -37,8 +37,10 @@ class EncounterSystem {
         const zone = CONFIG.ZONES[tile.zone];
         if (!zone || !zone.encounterRate) return;
 
-        // Check for encounter based on zone rate
-        if (Math.random() < zone.encounterRate * (delta / 1000)) {
+        // zone.encounterRate is a per-step chance; scale it into a
+        // per-second probability so encounters do not depend on frame rate.
+        const chance = zone.encounterRate * CONFIG.ENCOUNTER_RATE_SCALE * (delta / 1000);
+        if (Math.random() < chance) {
             this.triggerEncounter(tile.zone);
         }
     }
@@ -50,20 +52,16 @@ class EncounterSystem {
         this.encounterActive = true;
 
         // Create wild monster
-        const monsterName = getRandomMonsterForZone(zoneType);
-        const level = getRandomWildLevel();
-        
-        // Create monster (we'll use the battle system to create it properly)
-        const wildMonster = new Monster(this.scene, monsterName, level, true);
+        const wildMonster = createWildMonster(zoneType);
         
         // Show encounter notification
         this.scene.events.emit('encounter-notification', {
             monster: wildMonster
         });
 
-        // Start battle after notification
+        // Start battle after notification. encounterActive stays true until
+        // the battle ends, so a second encounter cannot stack on this one.
         this.scene.time.delayedCall(1500, () => {
-            this.encounterActive = false;
             this.scene.events.emit('encounter-start', {
                 player: this.player,
                 wildMonster: wildMonster,

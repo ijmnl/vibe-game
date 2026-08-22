@@ -1,225 +1,109 @@
-# 🎮 Pixel Monster Adventure - Test Report
+# 🎮 Pixel Monster Adventure - Testrapport
 
-## ✅ **ALLE TESTS GESLAAGD!**
+Getest in een echte browser (Chromium via Playwright) op geëmuleerde
+telefoons: iPhone 13 (390x664), Pixel 5 (393x727), Galaxy S9+ (320x658) en
+liggend (844x390).
 
----
-
-## 📊 **Test Samenvatting**
-
-| Categorie | Totaal | Geslaagd | Gefaald |
-|-----------|--------|----------|---------|
-| **Bestandsbestaan** | 19 | 19 | 0 |
-| **HTML Structuur** | 2 | 2 | 0 |
-| **JavaScript Syntax** | 18 | 18 | 0 |
-| **Class Definities** | 3 | 3 | 0 |
-| **Phaser Scenes** | 9 | 9 | 0 |
-| **Audio Initialisatie** | 1 | 1 | 0 |
-| **Totaal** | **47** | **47** | **0** |
-
-**Succes percentage: 100% ✅**
+Het vorige rapport controleerde alleen of bestanden bestonden en of de
+JavaScript-syntax klopte. Dat zei niets over of het spel start - en dat deed
+het niet.
 
 ---
 
-## 🔍 **Gedetailleerde Test Resultaten**
+## 🔴 Uitgangssituatie
 
-### 📁 **Bestandsbestaan** (19/19)
-Alle vereiste bestanden bestaan:
-- ✅ index.html
-- ✅ css/style.css
-- ✅ js/config.js
-- ✅ js/main.js
-- ✅ js/world/WorldGenerator.js
-- ✅ js/entities/Player.js
-- ✅ js/entities/Monster.js
-- ✅ js/systems/BattleSystem.js
-- ✅ js/systems/EncounterSystem.js
-- ✅ js/systems/Inventory.js
-- ✅ js/systems/AudioManager.js
-- ✅ js/scenes/BootScene.js
-- ✅ js/scenes/WorldScene.js
-- ✅ js/scenes/BattleScene.js
-- ✅ js/ui/Minimap.js
-- ✅ js/ui/UIManager.js
-- ✅ js/utils/SpriteGenerator.js
+Het spel startte helemaal niet. `index.html` laadde `AudioManager.js` niet,
+terwijl `main.js` er meteen een instantie van maakte:
 
-### 🌐 **HTML Structuur** (2/2)
-- ✅ Phaser CDN (versie 3.80.1) geladen
-- ✅ Alle scripts correct gelinkt
+```
+[pageerror] AudioManager is not defined  (js/main.js:26)
+```
 
-### 💻 **JavaScript Syntax** (18/18)
-Alle JavaScript bestanden hebben geldige syntax:
-- ✅ js/config.js
-- ✅ js/main.js
-- ✅ js/world/WorldGenerator.js
-- ✅ js/entities/Player.js
-- ✅ js/entities/Monster.js
-- ✅ js/systems/BattleSystem.js
-- ✅ js/systems/EncounterSystem.js
-- ✅ js/systems/Inventory.js
-- ✅ js/systems/AudioManager.js
-- ✅ js/scenes/BootScene.js
-- ✅ js/scenes/WorldScene.js
-- ✅ js/scenes/BattleScene.js
-- ✅ js/ui/Minimap.js
-- ✅ js/ui/UIManager.js
-- ✅ js/utils/SpriteGenerator.js
-
-### 🏗️ **Class Definities** (3/3)
-- ✅ WorldGenerator class gedefinieerd
-- ✅ Player class gedefinieerd
-- ✅ Monster class gedefinieerd
-
-### 🎭 **Phaser Scenes** (9/9)
-Alle scenes zijn correct geïmplementeerd:
-- ✅ BootScene extends Phaser.Scene
-- ✅ BootScene heeft preload()
-- ✅ BootScene heeft create()
-- ✅ WorldScene extends Phaser.Scene
-- ✅ WorldScene heeft preload()
-- ✅ WorldScene heeft create()
-- ✅ BattleScene extends Phaser.Scene
-- ✅ BattleScene heeft preload()
-- ✅ BattleScene heeft create()
-
-### 🎵 **Audio Systeem** (1/1)
-- ✅ AudioManager geïnitialiseerd in main.js
+Die fout brak het script af vóór `new Phaser.Game(...)`, dus er verscheen
+nooit een spel - alleen een leeg scherm.
 
 ---
 
-## 🎯 **Functie Tests**
+## 🐛 Gevonden en opgeloste fouten
 
-### 🌍 **World Generation**
-- ✅ Wereld gegenereerd met 100x100 tiles
-- ✅ 5 zones: GRASS, FOREST, WATER, CAVE, SAND
-- ✅ Paden tussen zones
-- ✅ Collision detection werkt
-- ✅ Zone detectie werkt
-
-### 👾 **Entities**
-- ✅ Player kan bewegen (move method)
-- ✅ Player kan monsters toevoegen (addMonster)
-- ✅ Player kan monsters vangen (catchMonster)
-- ✅ Monster kan damage nemen (takeDamage)
-- ✅ Monster kan aanvallen (useAttack)
-- ✅ Monster kan genezen (heal)
-- ✅ Monster heeft isAlive check
-
-### ⚔️ **Battle System**
-- ✅ Battle kan starten (startBattle)
-- ✅ Speler kan acties uitvoeren (playerAction)
-- ✅ Speler kan aanvallen (playerAttack)
-- ✅ Monster kan gevangen worden (tryCatch)
-- ✅ Speler kan vluchten (tryRun)
-- ✅ Items kunnen gebruikt worden (useItem)
-- ✅ Enemy turn werkt (enemyTurn)
-
-### 🎒 **Inventory**
-- ✅ Items kunnen toegevoegd worden (addItem)
-- ✅ Items kunnen gebruikt worden (useItem)
-- ✅ Item count kan opgevraagd worden (getItemCount)
-- ✅ Items kunnen verwijderd worden (removeItem)
-- ✅ Check of item bestaat (hasItem)
-- ✅ Maximaal 99 items per type
-
-### 🗺️ **UI System**
-- ✅ Minimap werkt
-- ✅ Battle UI werkt
-- ✅ Menu UI werkt
-- ✅ Encounter notifications werken
-- ✅ Player stats worden getoond
+| # | Probleem | Gevolg |
+|---|----------|--------|
+| 1 | `AudioManager.js` niet geladen in `index.html` | Spel startte niet |
+| 2 | `audioManager` twee keer gedeclareerd (`main.js` + `AudioManager.js`) | `SyntaxError` na fix 1 |
+| 3 | `BootScene` gebruikte `this.scene.events` (bestaat niet) | Crash in laadscherm |
+| 4 | Laadscherm werd nooit verwijderd | Zwart scherm over het spel |
+| 5 | `Minimap` riep `camera.getWorldView()` aan (Phaser 3: `camera.worldView`) | Crash bij eerste frame |
+| 6 | `WorldScene` draaide `update()` twee keer, één keer zonder `delta` | Spelerpositie werd `NaN` |
+| 7 | Team-monsters waren gewone objecten, wilde monsters `Monster`-instanties | `getRandomAttack is not a function` bij elk gevecht |
+| 8 | `BattleScene` luisterde op eigen events, `BattleSystem` zond op `WorldScene` | Gevecht eindigde nooit; spel bevroor |
+| 9 | Beurttimers stonden op de *gepauzeerde* `WorldScene`-klok | Tegenstander was nooit aan zet |
+| 10 | `tryCatch()` gebruikte `playerMonster` buiten scope | Crash bij mislukte vangst |
+| 11 | `checkBattleEnd()` draaide door na `endBattle()` (`this.player === null`) | Crash na geslaagde vangst of vlucht |
+| 12 | Zowel `Player` als `EncounterSystem` rolde ontmoetingen; `Player` zond een event zonder monster | Crash bij gevecht |
+| 13 | "Use Item" toonde een lijst binnen het verborgen menu | Knop deed niets in gevecht |
+| 14 | Monster-sprites hoorden bij de gepauzeerde `WorldScene` | Onzichtbaar in het gevechtsscherm |
+| 15 | Groen debug-collisionvak lag over de speler | Speler zag er bruin uit |
+| 16 | Ontmoetingskans was ~1 per 50 seconden lopen | Voelde als een leeg spel |
+| 17 | Testpagina berekende resultaten maar toonde ze nooit | Rapport leek leeg |
 
 ---
 
-## 🐛 **Gevonden Issues & Fixes**
+## 📱 Mobiel
 
-### ❌ **Critical Issues (Opgelost)**
-1. **BattleScene mist preload() method** ➜ **OPGELOST**
-   - BattleScene.js had geen preload() method, wat vereist is voor Phaser scenes
-   - Toegevoegd: `preload() { // Preload any battle-specific assets }`
-
-### ⚠️ **Minor Issues (Opgelost)**
-1. **AudioManager niet geïnitialiseerd** ➜ **OPGELOST**
-   - AudioManager was gedefinieerd maar niet geïnitialiseerd in main.js
-   - Toegevoegd: `const audioManager = new AudioManager();` in main.js
-
-### ℹ️ **Informatieve Opmerkingen**
-1. **Event listener cleanup** - BattleScene zou event listeners kunnen cleanen bij destroy (niet kritisch)
-2. **Error handling** - BattleScene zou betere error handling kunnen hebben (niet kritisch)
-
----
-
-## 🚀 **Gameplay Verificatie**
-
-### ✅ **Werkt Correct**
-- Speler beweging met pijltjestoetsen
-- Random encounters in gras, bos, water, grot
-- Turn-based battles met:
-  - Attack
-  - Catch (met verschillende ball types)
-  - Run (snelheid beïnvloedt succes)
-  - Use Item (potions, etc.)
-- Monster vangen en trainen
-- Level-up systeem met EXP
-- Inventory management
-- Minimap navigatie
-- Camera volgt speler
-- Zone detectie
-
-### 🎨 **Graphics**
-- Programmatisch gegenereerde pixel art voor:
-  - Speler (4 richtingen)
-  - Monsters (12 types)
-  - Tiles (gras, bos, water, grot, woestijn)
-  - Items (potions, balls)
-- Toekomst: Vervang met echte pixel art afbeeldingen voor betere kwaliteit
-
-### 🎵 **Audio**
-- Procedural sound effects met Web Audio API:
-  - Attack
-  - Catch
-  - Level up
-  - Heal
-  - Encounter
-  - Run
-- Background music per zone
-- Toekomst: Vervang met echte audio files
+| Onderwerp | Voor | Na |
+|-----------|------|-----|
+| Besturing | Alleen toetsenbord (swipe zette alleen de kijkrichting) | D-pad + MENU-knop op het scherm, plus pijltjes/WASD |
+| Canvas | Vaste 800x600, `Phaser.Scale.FIT` | `Phaser.Scale.RESIZE`, vult het scherm |
+| Schermgebruik staand | ~40% (zwarte balken boven en onder) | 100% |
+| Viewport-meta | Zoomen/dubbeltikken mogelijk | `user-scalable=no, viewport-fit=cover` |
+| Notch / afgeronde hoeken | Geen rekening mee gehouden | `env(safe-area-inset-*)` overal |
+| Adresbalk die inklapt | `100vh` sprong | `100dvh` met `100vh` fallback |
+| Raakdoelen | Knoppen van 12px tekst | Minimaal 44px hoog |
+| Lettertype | 'Press Start 2P' nooit geladen | Via Google Fonts, met fallback |
+| Audio | Startte zonder gebruikersgebaar (iOS blokkeert dat) | Wordt ontgrendeld bij eerste tik |
+| Opslaan | Alleen elke minuut | Ook bij verlaten/achtergrond zetten van de pagina |
+| Liggend | Ongetest | Eigen layout: 4 knoppen naast elkaar, kleinere D-pad |
 
 ---
 
-## 📝 **Known Limitations**
+## ⚡ Prestaties
 
-1. **Geen echte pixel art sprites** - Nu programmatisch gegenereerd
-2. **Geen touch controls** - Alleen keyboard voor nu
-3. **Geen mobile optimizatie** - Werkt beter op desktop
-4. **Geen NPCs of quests** - Alleen wild monster encounters
-5. **Geen evolution systeem** - Monsters levelen alleen op
-6. **Geen type advantage visualisatie** - Alleen in code
+De wereld (100x100 tegels) werd getekend als losse rechthoeken, elk een eigen
+Phaser-object, plus een oneindige tween per watertegel. De minimap tekende
+alle 10.000 tegels opnieuw bij elk frame.
 
----
+Nu wordt de tegelset één keer in een textuur gebakken en de wereld als één
+tilemap-laag getekend (Phaser cullt die zelf), en de minimap bewaart het
+terrein op een offscreen canvas.
 
-## 🎉 **Conclusie**
+Gemeten op een geëmuleerde iPhone 13, tijdens het lopen:
 
-**De game is 100% functioneel en klaar om getest te worden!** 🎮
+| | Voor | Na |
+|---|------|-----|
+| **Beeldsnelheid** | **15 fps** | **60 fps** |
+| Objecten in de wereldscène | 11.634 | 2 |
+| Actieve tweens | 900 | 0 |
 
-Alle kritische bugs zijn opgelost en de game zou moeten werken zoals verwacht:
-- Verken de wereld
-- Vind wild monsters
-- Vechten en vang ze
-- Train je monsters
-- Gebruik items
-- Bekijk de minimap
-
-### 🔗 **Hoe te testen**
-1. Open `index.html` in een moderne browser (Chrome, Firefox, Edge)
-2. Gebruik pijltjestoetsen om te bewegen
-3. Loop in gras/bos/water/grot voor random encounters
-4. Gebruik ESC of M voor het menu
-
-### 💡 **Toekomstige Verbeteringen**
-Zie `README.md` voor een lijst met mogelijke verbeteringen.
+Ook 60-61 fps op Pixel 5 en Galaxy S9+.
 
 ---
 
-**Test datum:** 22 Augustus 2025  
-**Test status:** ✅ **ALLE TESTS GESLAAGD**  
-**Game status:** ✅ **KLAAR VOOR PRODUCTIE**
+## ✅ Wat er nu speelbaar is getest
+
+Volledige doorloop op een geëmuleerde iPhone 13, zonder fouten in de console:
+
+- Lopen met de D-pad, positie en zone worden bijgewerkt
+- Wilde ontmoeting in gras, bos, grot en woestijn
+- Gevecht: aanvallen, beurtwisseling, schade, type-effectiviteit
+- Winnen → EXP → terug naar de wereld → weer kunnen lopen
+- Vangen (inclusief mislukte pogingen en "team is vol")
+- Vluchten (inclusief mislukte pogingen)
+- Voorwerp gebruiken via de nieuwe keuzelijst in het gevecht
+- Verliezen → alle monsters genezen, speler terug naar het startpunt
+- Menu: team en voorwerpen, monster wisselen
+- Opslaan en herladen: team, levels en voorwerpen blijven behouden
+- Offline en vanaf een `file://`-adres (Phaser staat in `vendor/`)
+
+De eigen testpagina (`test/index.html`): **26 tests, 0 gefaald**. De ene
+waarschuwing ("Phaser.js not loaded in test environment") is verwacht - die
+pagina laadt alleen de spelmodules, niet Phaser zelf.
