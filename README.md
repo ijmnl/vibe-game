@@ -14,14 +14,22 @@ A Pokémon-inspired HTML5 game built with Phaser.js and modern JavaScript.
 
 ## 📱 Playing on your phone
 
-The game is a static site, so any web host works. The repository ships a
-GitHub Pages workflow (`.github/workflows/pages.yml`): once **Settings →
-Pages → Source** is set to **GitHub Actions**, every push to `main` publishes
-the game at `https://<user>.github.io/<repo>/`. Open that URL on your phone
-and add it to the home screen for a full-screen, browser-chrome-free game.
+The game is live at **https://ijmnl.github.io/vibe-game/** - open it on your
+phone and add it to the home screen for a full-screen, browser-chrome-free
+game.
 
-To try it on your phone before publishing, serve the folder from your computer
-and open its LAN address on the phone (same Wi-Fi):
+It is published with GitHub Pages from **Settings → Pages → Source: Deploy
+from a branch**. Point that at whichever branch you want live; after merging a
+pull request, set it to `main` so the site keeps updating. Pages needs the
+repository to be public (or a paid plan). `.nojekyll` keeps Pages from running
+a Jekyll build over the files.
+
+A GitHub Actions workflow (`.github/workflows/pages.yml`) is also included, if
+you would rather publish that way: set **Source** to **GitHub Actions** and
+every push to `main` deploys.
+
+To test a change before pushing, serve the folder from your computer and open
+its LAN address on the phone (same Wi-Fi):
 
 ```bash
 python3 -m http.server 8000
