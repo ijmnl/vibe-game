@@ -1,0 +1,331 @@
+body {
+    margin: 0;
+    padding: 0;
+    background-color: #1a1a2e;
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    overflow: hidden;
+    user-select: none;
+}
+
+#game-container {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#ui-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+#minimap-container {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 150px;
+    height: 150px;
+    background: rgba(0, 0, 0, 0.7);
+    border: 2px solid #4a4a6a;
+    border-radius: 8px;
+    pointer-events: auto;
+}
+
+#minimap {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+}
+
+#player-stats {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    pointer-events: auto;
+}
+
+/* Battle UI */
+#battle-ui {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: auto;
+}
+
+.battle-panel {
+    width: 80%;
+    max-width: 600px;
+    background: rgba(30, 30, 40, 0.95);
+    border: 4px solid #ffcc00;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.battle-panel > * {
+    pointer-events: auto;
+}
+
+.enemy-info, .player-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 10px;
+    background: rgba(50, 50, 60, 0.8);
+    border-radius: 8px;
+}
+
+.enemy-sprite, .player-monster-sprite {
+    width: 80px;
+    height: 80px;
+    background: #333;
+    border-radius: 4px;
+    image-rendering: pixelated;
+}
+
+.health-bar {
+    width: 200px;
+    height: 20px;
+    background: #333;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.health-fill {
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(90deg, #ff0000, #ff8888);
+    transition: width 0.3s ease;
+    border-radius: 10px;
+}
+
+.battle-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.battle-btn {
+    padding: 12px;
+    background: #4a4a6a;
+    color: #fff;
+    border: 2px solid #ffcc00;
+    border-radius: 8px;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.battle-btn:hover {
+    background: #5a5a7a;
+    transform: scale(1.05);
+}
+
+.battle-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.battle-log {
+    height: 100px;
+    overflow-y: auto;
+    background: rgba(20, 20, 30, 0.8);
+    border-radius: 8px;
+    padding: 10px;
+    color: #fff;
+    font-size: 12px;
+    text-shadow: 1px 1px 2px #000;
+}
+
+.battle-log::-webkit-scrollbar {
+    width: 6px;
+}
+
+.battle-log::-webkit-scrollbar-thumb {
+    background: #ffcc00;
+    border-radius: 3px;
+}
+
+/* Menu UI */
+#menu-ui {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: auto;
+}
+
+.menu-panel {
+    width: 80%;
+    max-width: 500px;
+    background: rgba(30, 30, 40, 0.95);
+    border: 4px solid #ffcc00;
+    border-radius: 12px;
+    padding: 20px;
+    color: #fff;
+}
+
+.menu-panel > * {
+    pointer-events: auto;
+}
+
+.menu-section {
+    margin-bottom: 20px;
+}
+
+.menu-section h3 {
+    border-bottom: 2px solid #ffcc00;
+    padding-bottom: 5px;
+    margin-bottom: 10px;
+}
+
+.monster-list, .item-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.monster-list::-webkit-scrollbar, .item-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.monster-list::-webkit-scrollbar-thumb, .item-list::-webkit-scrollbar-thumb {
+    background: #ffcc00;
+    border-radius: 3px;
+}
+
+.monster-item, .item-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: rgba(50, 50, 60, 0.8);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.monster-item:hover, .item-item:hover {
+    background: rgba(70, 70, 80, 0.8);
+}
+
+#close-menu-btn {
+    padding: 12px 24px;
+    background: #4a4a6a;
+    color: #fff;
+    border: 2px solid #ffcc00;
+    border-radius: 8px;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 14px;
+    cursor: pointer;
+    display: block;
+    margin: 0 auto;
+}
+
+/* Encounter Notification */
+#encounter-notification {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 200, 0, 0.9);
+    color: #000;
+    padding: 20px 40px;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: bold;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    pointer-events: auto;
+    z-index: 1000;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: translate(-50%, -50%) scale(1); }
+    50% { transform: translate(-50%, -50%) scale(1.1); }
+    100% { transform: translate(-50%, -50%) scale(1); }
+}
+
+/* Hidden class */
+.hidden {
+    display: none !important;
+}
+
+/* Load screen */
+#loading-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #1a1a2e;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    color: #fff;
+    z-index: 2000;
+}
+
+#loading-progress {
+    width: 300px;
+    height: 30px;
+    background: #333;
+    border-radius: 15px;
+    margin-top: 20px;
+    overflow: hidden;
+}
+
+#loading-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #ff0000, #ffff00);
+    border-radius: 15px;
+    transition: width 0.3s ease;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .battle-actions {
+        grid-template-columns: 1fr;
+    }
+    
+    #minimap-container {
+        width: 100px;
+        height: 100px;
+    }
+    
+    #player-stats {
+        font-size: 10px;
+    }
+}

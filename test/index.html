@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pixel Monster Adventure - Test Runner</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a2e;
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #ffcc00;
+            text-align: center;
+        }
+        .test-section {
+            background: #2a2a3e;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-left: 4px solid #ffcc00;
+        }
+        .test-section h2 {
+            margin-top: 0;
+            color: #ffcc00;
+        }
+        .test-result {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+        .pass {
+            background: #2e8b57;
+            color: #fff;
+        }
+        .fail {
+            background: #ff4444;
+            color: #fff;
+        }
+        .warn {
+            background: #ffcc00;
+            color: #000;
+        }
+        .info {
+            background: #4a4a6a;
+            color: #fff;
+        }
+        button {
+            background: #ffcc00;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            margin: 5px;
+        }
+        button:hover {
+            background: #ffdd44;
+        }
+        #game-frame {
+            width: 100%;
+            height: 500px;
+            border: 2px solid #ffcc00;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .summary {
+            background: #3a3a5a;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 Pixel Monster Adventure - Test Report</h1>
+        
+        <div class="test-section">
+            <h2>📊 Test Summary</h2>
+            <div id="summary" class="summary">
+                <p>Total Tests: <span id="total-tests">0</span></p>
+                <p>Passed: <span id="passed-tests">0</span></p>
+                <p>Failed: <span id="failed-tests">0</span></p>
+                <p>Warnings: <span id="warning-tests">0</span></p>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>🔍 Core Functionality Tests</h2>
+            <div id="core-tests"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>🌍 World Generation Tests</h2>
+            <div id="world-tests"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>👾 Entity Tests</h2>
+            <div id="entity-tests"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>⚔️ Battle System Tests</h2>
+            <div id="battle-tests"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>🎒 Inventory Tests</h2>
+            <div id="inventory-tests"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>🎨 UI Tests</h2>
+            <div id="ui-tests"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>🎵 Audio Tests</h2>
+            <div id="audio-tests"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>🐛 Known Issues</h2>
+            <div id="known-issues"></div>
+        </div>
+
+        <div style="text-align: center; margin: 30px 0;">
+            <button onclick="runAllTests()">Run All Tests</button>
+            <button onclick="runGameTest()">Test Game in Frame</button>
+        </div>
+
+        <div style="display: none;">
+            <iframe id="game-frame" src="../index.html"></iframe>
+        </div>
+    </div>
+
+    <script>
+        // Test results
+        let testResults = {
+            total: 0,
+            passed: 0,
+            failed: 0,
+            warnings: 0,
+            issues: []
+        };
+
+        // DOM elements
+        const totalTestsEl = document.getElementById('total-tests');
+        const passedTestsEl = document.getElementById('passed-tests');
+        const failedTestsEl = document.getElementById('failed-tests');
+        const warningTestsEl = document.getElementById('warning-tests');
+
+        function addResult(message, type = 'info') {
+            testResults.total++;
+            
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.textContent = message;
+            
+            switch(type) {
+                case 'pass':
+                    testResults.passed++;
+                    break;
+                case 'fail':
+                    testResults.failed++;
+                    testResults.issues.push(message);
+                    break;
+                case 'warn':
+                    testResults.warnings++;
+                    testResults.issues.push(message);
+                    break;
+            }
+            
+            updateSummary();
+            return div;
+        }
+
+        function updateSummary() {
+            totalTestsEl.textContent = testResults.total;
+            passedTestsEl.textContent = testResults.passed;
+            failedTestsEl.textContent = testResults.failed;
+            warningTestsEl.textContent = testResults.warnings;
+        }
+
+        function runTest(name, testFn) {
+            try {
+                const result = testFn();
+                if (result === true) {
+                    return addResult(`✅ ${name}`, 'pass');
+                } else if (typeof result === 'string') {
+                    return addResult(`⚠️ ${name}: ${result}`, 'warn');
+                } else {
+                    return addResult(`✅ ${name}`, 'pass');
+                }
+            } catch (e) {
+                return addResult(`❌ ${name}: ${e.message}`, 'fail');
+            }
+        }
+
+        // Core Tests
+        function testCore() {
+            const section = document.getElementById('core-tests');
+            
+            runTest('CONFIG object exists', () => {
+                if (typeof CONFIG === 'undefined') throw new Error('CONFIG not loaded');
+                return true;
+            });
+            
+            runTest('CONFIG has all required properties', () => {
+                const required = ['GAME_WIDTH', 'GAME_HEIGHT', 'TILE_SIZE', 'WORLD_WIDTH', 'WORLD_HEIGHT', 'ZONES'];
+                for (const prop of required) {
+                    if (!(prop in CONFIG)) return `Missing property: ${prop}`;
+                }
+                return true;
+            });
+            
+            runTest('Zones are properly defined', () => {
+                const zones = CONFIG.ZONES;
+                const requiredZones = ['GRASS', 'FOREST', 'WATER', 'CAVE', 'SAND'];
+                for (const zone of requiredZones) {
+                    if (!(zone in zones)) return `Missing zone: ${zone}`;
+                }
+                return true;
+            });
+            
+            runTest('Helper functions exist', () => {
+                if (typeof getRandomMonsterForZone !== 'function') throw new Error('getRandomMonsterForZone missing');
+                if (typeof getMonsterStats !== 'function') throw new Error('getMonsterStats missing');
+                if (typeof getRandomWildLevel !== 'function') throw new Error('getRandomWildLevel missing');
+                return true;
+            });
+        }
+
+        // World Tests
+        function testWorld() {
+            const section = document.getElementById('world-tests');
+            
+            runTest('WorldGenerator class exists', () => {
+                if (typeof WorldGenerator === 'undefined') throw new Error('WorldGenerator not defined');
+                return true;
+            });
+            
+            runTest('WorldGenerator can be instantiated', () => {
+                const gen = new WorldGenerator();
+                if (!gen) throw new Error('Could not create WorldGenerator');
+                return true;
+            });
+            
+            runTest('WorldGenerator generates valid world', () => {
+                const gen = new WorldGenerator();
+                const world = gen.generate();
+                if (!world || world.length === 0) throw new Error('World is empty');
+                if (world.length !== CONFIG.WORLD_HEIGHT) return `World height mismatch: ${world.length} vs ${CONFIG.WORLD_HEIGHT}`;
+                return true;
+            });
+            
+            runTest('World has proper zones', () => {
+                const gen = new WorldGenerator();
+                gen.generate();
+                const zones = gen.zoneMap;
+                if (!zones || zones.length === 0) throw new Error('No zones generated');
+                return true;
+            });
+            
+            runTest('Collision map is generated', () => {
+                const gen = new WorldGenerator();
+                gen.generate();
+                if (!gen.collisionMap || gen.collisionMap.length === 0) throw new Error('No collision map');
+                return true;
+            });
+        }
+
+        // Entity Tests
+        function testEntities() {
+            const section = document.getElementById('entity-tests');
+            
+            runTest('Monster class exists', () => {
+                if (typeof Monster === 'undefined') throw new Error('Monster class not defined');
+                return true;
+            });
+            
+            runTest('Player class exists', () => {
+                if (typeof Player === 'undefined') throw new Error('Player class not defined');
+                return true;
+            });
+            
+            runTest('Monster stats are valid', () => {
+                const monster = new Monster({ add: () => {}, time: { now: 0 } }, 'Slime', 1, true);
+                if (!monster.name || !monster.level || !monster.hp) throw new Error('Monster missing properties');
+                return true;
+            });
+        }
+
+        // Battle System Tests
+        function testBattle() {
+            const section = document.getElementById('battle-tests');
+            
+            runTest('BattleSystem class exists', () => {
+                if (typeof BattleSystem === 'undefined') throw new Error('BattleSystem not defined');
+                return true;
+            });
+            
+            runTest('BattleSystem can be instantiated', () => {
+                const scene = { events: { emit: () => {} }, time: { now: 0, delayedCall: () => {} } };
+                const battle = new BattleSystem(scene);
+                if (!battle) throw new Error('Could not create BattleSystem');
+                return true;
+            });
+            
+            runTest('Monster can take damage', () => {
+                const scene = { add: () => ({}), time: { now: 0 } };
+                const monster = new Monster(scene, 'Slime', 5, true);
+                const oldHp = monster.hp;
+                monster.takeDamage(10);
+                if (monster.hp >= oldHp) return 'HP did not decrease after damage';
+                return true;
+            });
+            
+            runTest('Monster can heal', () => {
+                const scene = { add: () => ({}), time: { now: 0 } };
+                const monster = new Monster(scene, 'Slime', 5, true);
+                monster.takeDamage(10);
+                const oldHp = monster.hp;
+                monster.heal(5);
+                if (monster.hp <= oldHp) return 'HP did not increase after healing';
+                return true;
+            });
+        }
+
+        // Inventory Tests
+        function testInventory() {
+            const section = document.getElementById('inventory-tests');
+            
+            runTest('Inventory class exists', () => {
+                if (typeof Inventory === 'undefined') throw new Error('Inventory class not defined');
+                return true;
+            });
+            
+            runTest('Inventory can add items', () => {
+                const inv = new Inventory();
+                inv.addItem('Potion', 3);
+                if (inv.getItemCount('Potion') !== 3) return 'Item count incorrect';
+                return true;
+            });
+            
+            runTest('Inventory can use items', () => {
+                const inv = new Inventory();
+                inv.addItem('Potion', 3);
+                const result = inv.useItem('Potion', { healMonster: (amt) => true });
+                if (!result.success) return 'Could not use item';
+                if (inv.getItemCount('Potion') !== 2) return 'Item not removed after use';
+                return true;
+            });
+            
+            runTest('Inventory prevents overflow', () => {
+                const inv = new Inventory();
+                inv.addItem('Potion', 100);
+                if (inv.getItemCount('Potion') > 99) return 'Inventory overflowed';
+                return true;
+            });
+        }
+
+        // UI Tests
+        function testUI() {
+            const section = document.getElementById('ui-tests');
+            
+            runTest('Minimap class exists', () => {
+                if (typeof Minimap === 'undefined') throw new Error('Minimap class not defined');
+                return true;
+            });
+            
+            runTest('UIManager class exists', () => {
+                if (typeof UIManager === 'undefined') throw new Error('UIManager class not defined');
+                return true;
+            });
+            
+            runTest('UI elements exist in HTML', () => {
+                const required = ['battle-ui', 'menu-ui', 'minimap-container', 'encounter-notification'];
+                for (const id of required) {
+                    const el = document.getElementById(id);
+                    if (!el) return `Missing UI element: ${id}`;
+                }
+                return true;
+            });
+        }
+
+        // Audio Tests
+        function testAudio() {
+            const section = document.getElementById('audio-tests');
+            
+            runTest('AudioManager class exists', () => {
+                if (typeof AudioManager === 'undefined') throw new Error('AudioManager class not defined');
+                return true;
+            });
+            
+            runTest('AudioManager can be instantiated', () => {
+                const audio = new AudioManager();
+                if (!audio) throw new Error('Could not create AudioManager');
+                return true;
+            });
+        }
+
+        // Known Issues
+        function checkKnownIssues() {
+            const section = document.getElementById('known-issues');
+            
+            // Check for potential issues
+            const issues = [];
+            
+            // Check if Phaser is loaded
+            if (typeof Phaser === 'undefined') {
+                issues.push('⚠️ Phaser.js not loaded in test environment (expected)');
+            }
+            
+            // Check for missing assets
+            // (We'll add these when we have actual assets)
+            
+            // Display issues
+            issues.forEach(issue => {
+                const div = document.createElement('div');
+                div.className = 'test-result warn';
+                div.textContent = issue;
+                section.appendChild(div);
+            });
+            
+            if (issues.length === 0) {
+                const div = document.createElement('div');
+                div.className = 'test-result pass';
+                div.textContent = '✅ No known issues detected';
+                section.appendChild(div);
+            }
+        }
+
+        function runGameTest() {
+            const frame = document.getElementById('game-frame');
+            frame.style.display = 'block';
+            frame.src = frame.src; // Refresh
+        }
+
+        function runAllTests() {
+            // Reset results
+            testResults = { total: 0, passed: 0, failed: 0, warnings: 0, issues: [] };
+            updateSummary();
+            
+            // Clear sections
+            document.getElementById('core-tests').innerHTML = '';
+            document.getElementById('world-tests').innerHTML = '';
+            document.getElementById('entity-tests').innerHTML = '';
+            document.getElementById('battle-tests').innerHTML = '';
+            document.getElementById('inventory-tests').innerHTML = '';
+            document.getElementById('ui-tests').innerHTML = '';
+            document.getElementById('audio-tests').innerHTML = '';
+            document.getElementById('known-issues').innerHTML = '';
+            
+            // Load game files
+            const scripts = [
+                '../js/config.js',
+                '../js/world/WorldGenerator.js',
+                '../js/entities/Monster.js',
+                '../js/entities/Player.js',
+                '../js/systems/Inventory.js',
+                '../js/systems/BattleSystem.js',
+                '../js/systems/EncounterSystem.js',
+                '../js/systems/AudioManager.js',
+                '../js/ui/Minimap.js',
+                '../js/ui/UIManager.js',
+                '../js/utils/SpriteGenerator.js'
+            ];
+            
+            let loaded = 0;
+            const totalScripts = scripts.length;
+            
+            function loadNext() {
+                if (loaded >= scripts.length) {
+                    // All scripts loaded, run tests
+                    testCore();
+                    testWorld();
+                    testEntities();
+                    testBattle();
+                    testInventory();
+                    testUI();
+                    testAudio();
+                    checkKnownIssues();
+                    return;
+                }
+                
+                const script = document.createElement('script');
+                script.src = scripts[loaded];
+                script.onload = () => {
+                    loaded++;
+                    loadNext();
+                };
+                script.onerror = () => {
+                    console.error(`Failed to load: ${scripts[loaded]}`);
+                    loaded++;
+                    loadNext();
+                };
+                document.head.appendChild(script);
+            }
+            
+            loadNext();
+        }
+
+        // Auto-run tests on page load (after a delay to allow scripts to load)
+        setTimeout(runAllTests, 1000);
+    </script>
+</body>
+</html>

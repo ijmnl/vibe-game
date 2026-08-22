@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Player Sprite Generator</title>
+    <style>
+        body {
+            background: #222;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        canvas {
+            border: 2px solid #fff;
+            background: #111;
+            image-rendering: pixelated;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="spriteCanvas" width="64" height="64"></canvas>
+    <script>
+        // Player sprite generator - 16x16 per frame, 4 directions
+        const canvas = document.getElementById('spriteCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Colors
+        const colors = {
+            skin: '#ffcc99',
+            hair: '#663300',
+            shirt: '#0066cc',
+            pants: '#336633',
+            shoes: '#333333',
+            outline: '#000000'
+        };
+
+        // Draw player sprite (down facing)
+        function drawPlayer(x, y, direction) {
+            ctx.fillStyle = colors.outline;
+            ctx.fillRect(x, y, 16, 16);
+
+            // Head
+            ctx.fillStyle = colors.skin;
+            ctx.fillRect(x + 2, y + 2, 12, 8);
+
+            // Hair
+            ctx.fillStyle = colors.hair;
+            ctx.fillRect(x + 4, y + 2, 8, 4);
+
+            // Eyes
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(x + 5, y + 5, 2, 1);
+            ctx.fillRect(x + 9, y + 5, 2, 1);
+
+            // Body
+            ctx.fillStyle = colors.shirt;
+            ctx.fillRect(x + 3, y + 8, 10, 6);
+
+            // Pants
+            ctx.fillStyle = colors.pants;
+            ctx.fillRect(x + 4, y + 12, 8, 4);
+
+            // Shoes
+            ctx.fillStyle = colors.shoes;
+            ctx.fillRect(x + 4, y + 15, 4, 1);
+            ctx.fillRect(x + 8, y + 15, 4, 1);
+        }
+
+        // Draw all directions
+        function drawAllDirections() {
+            ctx.clearRect(0, 0, 64, 64);
+            
+            // Down (0,0)
+            drawPlayer(0, 0, 'down');
+            
+            // Up (16,0)
+            drawPlayer(16, 0, 'up');
+            
+            // Left (0,16)
+            drawPlayer(0, 16, 'left');
+            
+            // Right (16,16)
+            drawPlayer(16, 16, 'right');
+        }
+
+        drawAllDirections();
+
+        // Save as PNG
+        document.addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = 'player_sprite.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        });
+    </script>
+</body>
+</html>
