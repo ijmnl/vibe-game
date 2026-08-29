@@ -1,425 +1,518 @@
+/**
+ * Turn-based battle logic.
+ *
+ * Emits on the world scene (where the DOM UI listens) but schedules its turn
+ * delays on whichever scene is actually running - the world scene is paused
+ * during a battle, so its clock is frozen.
+ */
 class BattleSystem {
     constructor(scene) {
         this.scene = scene;
-        // Turn delays must be scheduled on a scene that is actually running.
-        // The world scene is paused during a battle, so its clock is frozen.
         this.timerScene = scene;
+
         this.player = null;
         this.wildMonster = null;
         this.isBattleActive = false;
-        this.turn = 'player'; // 'player' or 'enemy'
+        this.turn = 'player';
         this.battleLog = [];
-        this.catchAttempts = 0;
-        this.maxCatchAttempts = 3; // Max attempts to catch a monster
+        this.busy = false;
     }
 
-    // Start a battle
     startBattle(player, wildMonster, timerScene = this.scene) {
         this.timerScene = timerScene;
         this.player = player;
         this.wildMonster = wildMonster;
         this.isBattleActive = true;
-        this.turn = this.determineFirstTurn();
-        this.catchAttempts = 0;
         this.battleLog = [];
-        
-        // Emit battle start event
+        this.busy = false;
+
+        player.recordSeen(wildMonster.name);
+
+        // Lead with someone who can actually fight
+        const healthy = player.getFirstHealthyIndex();
+        if (healthy >= 0) player.currentMonsterIndex = healthy;
+
+        player.getCurrentMonster()?.resetBattleState();
+        wildMonster.resetBattleState();
+
+        // Show the panel first: it clears the log box, which would otherwise
+        // wipe this opening line.
         this.scene.events.emit('battle-start', {
-            player: player,
-            wildMonster: wildMonster,
-            turn: this.turn
+            player,
+            wildMonster,
+            turn: 'player'
         });
-        
-        this.addToLog(`Wild ${wildMonster.name} Lv.${wildMonster.level} appeared!`);
-        
-        // If enemy goes first, start enemy turn
-        if (this.turn === 'enemy') {
-            this.enemyTurn();
-        }
+
+        this.addToLog(`A wild ${wildMonster.name} (Lv.${wildMonster.level}) appeared!`);
+        this.setTurn('player');
     }
 
-    // Determine who goes first based on speed
-    determineFirstTurn() {
-        const playerMonster = this.player.getCurrentMonster();
-        if (!playerMonster) return 'enemy';
-        
-        return playerMonster.speed >= this.wildMonster.speed ? 'player' : 'enemy';
+    setTurn(turn) {
+        this.turn = turn;
+        this.scene.events.emit('battle-turn-change', { turn, busy: this.busy });
     }
 
-    // Player turn - handle player action
-    async playerAction(action, target = null) {
-        if (!this.isBattleActive || this.turn !== 'player') {
-            return { success: false, reason: 'Not player turn' };
+    // Blocks input while an exchange plays out
+    setBusy(busy) {
+        this.busy = busy;
+        this.scene.events.emit('battle-turn-change', { turn: this.turn, busy });
+    }
+
+    wait(ms) {
+        return new Promise(resolve => this.timerScene.time.delayedCall(ms, resolve));
+    }
+
+    // --- player actions -----------------------------------------------------
+
+    async playerAction(action, payload = null) {
+        if (!this.isBattleActive || this.turn !== 'player' || this.busy) {
+            return { success: false, reason: 'Not your turn' };
         }
 
         const playerMonster = this.player.getCurrentMonster();
-        if (!playerMonster) {
-            return { success: false, reason: 'No monster to fight' };
-        }
+        if (!playerMonster) return { success: false, reason: 'No monster' };
 
-        let result = { success: true };
+        this.setBusy(true);
+
+        let playerActed = true;
 
         switch (action) {
-            case 'attack':
-                result = this.playerAttack();
+            case 'move':
+                await this.performPlayerMove(payload);
                 break;
-                
             case 'catch':
-                result = await this.tryCatch();
+                playerActed = await this.tryCatch(payload);
                 break;
-                
             case 'run':
-                result = this.tryRun();
+                playerActed = await this.tryRun();
                 break;
-                
             case 'use-item':
-                if (target) {
-                    result = this.useItem(target);
-                }
+                playerActed = await this.useItem(payload);
                 break;
-                
+            case 'switch':
+                playerActed = await this.switchMonster(payload);
+                break;
             default:
-                return { success: false, reason: 'Invalid action' };
+                this.setBusy(false);
+                return { success: false, reason: 'Unknown action' };
         }
 
-        // A successful catch or escape already ended the battle
         if (!this.isBattleActive) {
-            return result;
+            this.setBusy(false);
+            return { success: true };
         }
+
+        if (await this.checkFaintedAndMaybeEnd()) {
+            this.setBusy(false);
+            return { success: true };
+        }
+
+        // A failed catch or item still costs the turn
+        if (playerActed) {
+            await this.wait(500);
+            await this.enemyTurn();
+        }
+
+        if (this.isBattleActive) {
+            await this.endOfTurn();
+        }
+
+        this.setBusy(false);
+        if (this.isBattleActive) this.setTurn('player');
+
+        return { success: true };
+    }
+
+    async performPlayerMove(moveName) {
+        const attacker = this.player.getCurrentMonster();
+        const defender = this.wildMonster;
+        const move = getMove(moveName);
+
+        await this.performMove(attacker, defender, move, false);
+    }
+
+    async enemyTurn() {
+        if (!this.isBattleActive) return;
+
+        const attacker = this.wildMonster;
+        const defender = this.player.getCurrentMonster();
+        if (!attacker?.isAlive() || !defender?.isAlive()) return;
+
+        this.setTurn('enemy');
+        const move = attacker.chooseMove(defender);
+
+        await this.performMove(attacker, defender, move, true);
+        await this.checkFaintedAndMaybeEnd();
+    }
+
+    // One monster using one move on another
+    async performMove(attacker, defender, move, isEnemy) {
+        const label = isEnemy ? `Wild ${attacker.name}` : attacker.name;
+
+        const statusCheck = attacker.checkStatusBeforeMove();
+        if (statusCheck.message) this.addToLog(statusCheck.message);
+        if (!statusCheck.canAct) {
+            await this.wait(700);
+            return;
+        }
+
+        this.addToLog(`${label} used ${move.name}!`);
+        this.scene.events.emit('battle-move-used', { attacker, move, isEnemy });
+        await this.wait(450);
+
+        if (Math.random() > move.accuracy) {
+            this.addToLog(`It missed!`);
+            await this.wait(500);
+            return;
+        }
+
+        if (move.power > 0) {
+            const result = this.calculateDamage(attacker, defender, move);
+            defender.takeDamage(result.damage);
+
+            this.scene.events.emit('battle-damage', { target: defender, isEnemy: !isEnemy });
+
+            if (result.critical) this.addToLog('A critical hit!');
+            if (result.note) this.addToLog(result.note);
+            this.addToLog(`${defender.name} took ${result.damage} damage.`);
+
+            if (move.effect?.kind === 'drain') {
+                const healed = attacker.heal(Math.floor(result.damage * move.effect.percent));
+                if (healed > 0) this.addToLog(`${label} drained ${healed} HP.`);
+            }
+        }
+
+        await this.applyMoveEffect(attacker, defender, move, label);
+        await this.wait(500);
+    }
+
+    async applyMoveEffect(attacker, defender, move, label) {
+        const effect = move.effect;
+        if (!effect) return;
+
+        switch (effect.kind) {
+            case 'heal': {
+                const healed = attacker.heal(Math.floor(attacker.maxHp * effect.percent));
+                this.addToLog(healed > 0
+                    ? `${label} recovered ${healed} HP.`
+                    : `${label} is already at full health.`);
+                this.scene.events.emit('battle-heal', {});
+                break;
+            }
+            case 'status': {
+                if (Math.random() > (effect.chance ?? 1)) break;
+                if (defender.applyStatus(effect.status)) {
+                    this.addToLog(`${defender.name} is ${this.statusVerb(effect.status)}!`);
+                }
+                break;
+            }
+            case 'raise-attack':
+                if (attacker.changeStage('attack', effect.stages)) {
+                    this.addToLog(`${label}'s attack rose!`);
+                }
+                break;
+            case 'raise-defense':
+                if (attacker.changeStage('defense', effect.stages)) {
+                    this.addToLog(`${label}'s defence rose!`);
+                }
+                break;
+            case 'lower-attack':
+                if (defender.changeStage('attack', -effect.stages)) {
+                    this.addToLog(`${defender.name}'s attack fell!`);
+                }
+                break;
+            case 'lower-defense':
+                if (defender.changeStage('defense', -effect.stages)) {
+                    this.addToLog(`${defender.name}'s defence fell!`);
+                }
+                break;
+        }
+    }
+
+    statusVerb(status) {
+        return {
+            burn: 'burned',
+            poison: 'poisoned',
+            paralysis: 'paralysed',
+            sleep: 'fast asleep'
+        }[status] || status;
+    }
+
+    calculateDamage(attacker, defender, move) {
+        const attack = attacker.effectiveStat('attack');
+        const defense = defender.effectiveStat('defense');
+
+        const base = ((2 * attacker.level / 5 + 2) * move.power * attack / defense) / CONFIG.DAMAGE_SCALE + 2;
+
+        const multiplier = getTypeMultiplier(move.type, defender.type);
+        const stab = move.type === attacker.type ? CONFIG.STAB_MULTIPLIER : 1;
+        const critical = Math.random() < CONFIG.CRIT_CHANCE;
+        const crit = critical ? CONFIG.CRIT_MULTIPLIER : 1;
+        const variance = randomFloat(0.85, 1);
+
+        // A burn halves physical output
+        const burn = attacker.status === 'burn' ? 0.75 : 1;
+
+        return {
+            damage: Math.max(1, Math.floor(base * multiplier * stab * crit * variance * burn)),
+            critical,
+            note: describeEffectiveness(multiplier)
+        };
+    }
+
+    // --- catching -----------------------------------------------------------
+
+    async tryCatch(ballName) {
+        const inventory = this.player.getInventory();
+        const ball = ballName || this.bestAvailableBall();
+
+        if (!ball || !inventory.hasItem(ball)) {
+            this.addToLog('You have no balls left!');
+            await this.wait(600);
+            return false;
+        }
+
+        inventory.removeItem(ball, 1);
+        this.addToLog(`You threw a ${ball}!`);
+
+        const chance = this.catchChance(ball);
+        const success = Math.random() < chance;
+
+        this.scene.events.emit('battle-catch-attempt', { success, ball });
+        await this.wait(1400);
+
+        if (!success) {
+            this.addToLog(`The wild ${this.wildMonster.name} broke free!`);
+            return true; // a failed throw costs the turn
+        }
+
+        const result = this.player.catchMonster(this.wildMonster);
 
         if (result.success) {
-            // Check if battle should continue
-            if (!this.checkBattleEnd()) {
-                // Switch to enemy turn
-                this.turn = 'enemy';
-                this.scene.events.emit('battle-turn-change', { turn: this.turn });
-                
-                // Start enemy turn after a short delay
-                this.timerScene.time.delayedCall(1000, () => {
-                    if (this.isBattleActive) {
-                        this.enemyTurn();
-                    }
-                });
-            }
-        }
-
-        return result;
-    }
-
-    // Player attacks
-    playerAttack() {
-        const playerMonster = this.player.getCurrentMonster();
-        if (!playerMonster || !this.wildMonster) {
-            return { success: false, reason: 'No valid targets' };
-        }
-
-        // Choose a random attack type
-        const attackType = playerMonster.getRandomAttack();
-        
-        // Perform attack
-        const result = playerMonster.useAttack(attackType, this.wildMonster);
-        
-        this.addToLog(result.message);
-        this.addToLog(`Wild ${this.wildMonster.name} took ${result.damage} damage!`);
-        
-        // Check if wild monster is defeated
-        if (!this.wildMonster.isAlive()) {
-            this.addToLog(`Wild ${this.wildMonster.name} fainted!`);
-            
-            // Award EXP
-            const expGain = Math.floor(this.wildMonster.level * 10 * (1 + this.wildMonster.level / 10));
-            this.player.addExp(expGain);
-            this.addToLog(`Gained ${expGain} EXP!`);
-        }
-
-        return { success: true, damage: result.damage };
-    }
-
-    // Try to catch the wild monster
-    async tryCatch() {
-        this.catchAttempts++;
-        
-        if (this.catchAttempts > this.maxCatchAttempts) {
-            this.addToLog(`The wild ${this.wildMonster.name} broke free!`);
-            return { success: false, reason: 'Too many attempts' };
-        }
-
-        // Find a ball in inventory
-        const inventory = this.player.getInventory();
-        let ballUsed = null;
-        
-        // Try to use the best available ball
-        const ballTypes = ['Ultra Ball', 'Super Ball', 'Monster Ball'];
-        for (const ballType of ballTypes) {
-            if (inventory.hasItem(ballType)) {
-                ballUsed = ballType;
-                break;
-            }
-        }
-
-        if (!ballUsed) {
-            return { success: false, reason: 'No balls available' };
-        }
-
-        // Use the ball
-        inventory.removeItem(ballUsed, 1);
-        
-        // Calculate catch success
-        const ballData = CONFIG.ITEMS[ballUsed];
-        let successRate = ballData.catchRate;
-        
-        // Modify based on monster HP
-        const hpPercentage = this.wildMonster.hp / this.wildMonster.maxHp;
-        successRate *= (1 - hpPercentage * 0.7); // Lower HP = higher chance
-        
-        // Random chance
-        const success = Math.random() < successRate;
-        
-        // Show catch animation
-        this.scene.events.emit('battle-catch-attempt', {
-            success: success,
-            ball: ballUsed
-        });
-        
-        // Wait for animation
-        await new Promise(resolve => this.timerScene.time.delayedCall(1500, resolve));
-        
-        if (success) {
-            // Catch successful
-            const catchResult = this.player.catchMonster({
-                name: this.wildMonster.name,
-                level: this.wildMonster.level,
-                maxHp: this.wildMonster.maxHp,
-                hp: this.wildMonster.hp,
-                attack: this.wildMonster.attack,
-                defense: this.wildMonster.defense,
-                speed: this.wildMonster.speed,
-                expToLevel: this.wildMonster.expToLevel,
-                type: this.wildMonster.type
-            });
-            
-            if (catchResult.success) {
-                this.addToLog(`Gotcha! ${this.wildMonster.name} was caught!`);
-                this.endBattle('catch');
-                return { success: true, caught: true };
-            } else {
-                this.addToLog(`Oh no! ${catchResult.reason}`);
-                return { success: false, reason: catchResult.reason };
-            }
+            this.addToLog(`Gotcha! ${this.wildMonster.name} was caught!`);
+            this.endBattle('catch');
         } else {
-            this.addToLog(`Oh no! The wild ${this.wildMonster.name} broke free!`);
-            
-            // Wild monster attacks after breaking free
-            const playerMonster = this.player.getCurrentMonster();
-            if (this.wildMonster.isAlive() && playerMonster) {
-                const dealt = playerMonster.takeDamage(this.wildMonster.getAttackDamage());
-                this.addToLog(`Wild ${this.wildMonster.name} attacked! ${playerMonster.name} took ${dealt} damage!`);
-            }
-            
-            return { success: false, reason: 'Monster broke free' };
+            this.addToLog(`${this.wildMonster.name} was caught, but ${result.reason}`);
+            this.endBattle('catch-full');
         }
+
+        return false;
     }
 
-    // Try to run from battle
-    tryRun() {
-        // Calculate run success based on speed
-        const playerMonster = this.player.getCurrentMonster();
-        if (!playerMonster) {
-            return { success: false, reason: 'No monster to run with' };
+    // Weaker and status-afflicted monsters are easier to catch. There is no
+    // attempt limit - running out of balls is the only thing that stops you.
+    catchChance(ballName) {
+        const ball = CONFIG.ITEMS[ballName];
+        const hpFactor = 1 - (this.wildMonster.hp / this.wildMonster.maxHp) * 0.65;
+        const statusBonus = this.wildMonster.status
+            ? (this.wildMonster.status === 'sleep' ? 1.6 : 1.3)
+            : 1;
+        const levelPenalty = clamp(1 - this.wildMonster.level / 90, 0.45, 1);
+        const legendary = this.wildMonster.legendary ? 0.35 : 1;
+
+        return clamp(
+            0.55 * ball.catchRate * hpFactor * statusBonus * levelPenalty * legendary,
+            0.03,
+            0.95
+        );
+    }
+
+    bestAvailableBall() {
+        return ['Ultra Ball', 'Super Ball', 'Monster Ball']
+            .find(name => this.player.getInventory().hasItem(name)) || null;
+    }
+
+    // --- other actions ------------------------------------------------------
+
+    async tryRun() {
+        if (this.wildMonster.legendary) {
+            this.addToLog("You can't escape from this one!");
+            await this.wait(700);
+            return true;
         }
 
-        const speedRatio = playerMonster.speed / (playerMonster.speed + this.wildMonster.speed);
-        const successRate = 0.3 + speedRatio * 0.7; // 30-100% chance based on speed
-        
-        const success = Math.random() < successRate;
+        const mine = this.player.getCurrentMonster();
+        const ratio = mine.speed / (mine.speed + this.wildMonster.speed);
+        const success = Math.random() < 0.45 + ratio * 0.5;
 
         if (success) {
-            this.addToLog(`Got away safely!`);
+            this.addToLog('Got away safely!');
+            await this.wait(600);
             this.endBattle('run');
-            return { success: true, escaped: true };
-        } else {
-            this.addToLog(`Couldn't escape!`);
-
-            // Wild monster attacks after failed escape
-            const dealt = playerMonster.takeDamage(this.wildMonster.getAttackDamage());
-            this.addToLog(`Wild ${this.wildMonster.name} attacked! ${playerMonster.name} took ${dealt} damage!`);
-            
-            return { success: false, reason: 'Failed to escape' };
+            return false;
         }
+
+        this.addToLog("Couldn't get away!");
+        await this.wait(600);
+        return true;
     }
 
-    // Use an item in battle
-    useItem(itemName) {
+    async useItem(itemName) {
         const inventory = this.player.getInventory();
         const item = CONFIG.ITEMS[itemName];
-        
-        if (!item) {
-            return { success: false, reason: 'Unknown item' };
-        }
+        const monster = this.player.getCurrentMonster();
 
-        if (!inventory.hasItem(itemName)) {
-            return { success: false, reason: 'Item not available' };
-        }
+        if (!item || !inventory.hasItem(itemName) || !monster) return false;
 
-        switch (item.type) {
-            case 'heal':
-                const playerMonster = this.player.getCurrentMonster();
-                if (!playerMonster) {
-                    return { success: false, reason: 'No monster to heal' };
-                }
-                
-                const healed = playerMonster.heal(item.value);
-                
-                inventory.removeItem(itemName, 1);
-                
-                this.addToLog(`Used ${itemName}. ${playerMonster.name} restored ${healed} HP.`);
-                this.scene.events.emit('battle-heal', {
-                    monster: playerMonster,
-                    amount: healed
-                });
-                
-                return { success: true, healed: healed };
-                
-            default:
-                return { success: false, reason: 'Cannot use this item in battle' };
-        }
-    }
-
-    // Enemy turn
-    enemyTurn() {
-        if (!this.isBattleActive || this.turn !== 'enemy') {
-            return;
-        }
-
-        const playerMonster = this.player.getCurrentMonster();
-        if (!playerMonster || !this.wildMonster) {
-            this.endBattle('win');
-            return;
-        }
-
-        // Wild monster attacks
-        const attackType = this.wildMonster.getRandomAttack();
-        const result = this.wildMonster.useAttack(attackType, playerMonster);
-        
-        this.addToLog(result.message);
-        this.addToLog(`${playerMonster.name} took ${result.damage} damage!`);
-        
-        // Check if player monster fainted
-        if (!playerMonster.isAlive()) {
-            this.addToLog(`${playerMonster.name} fainted!`);
-            
-            // Check if player has other monsters
-            const aliveMonsters = this.player.getAllMonsters().filter(m => m.isAlive());
-            if (aliveMonsters.length > 0) {
-                this.addToLog(`Choose another monster!`);
-                // Emit event for monster selection
-                this.scene.events.emit('battle-monster-faint', {
-                    player: this.player
-                });
-            } else {
-                // Player has no more monsters - game over
-                this.endBattle('lose');
+        if (item.type === 'heal') {
+            if (monster.hp >= monster.maxHp) {
+                this.addToLog(`${monster.name} is already at full health.`);
+                await this.wait(600);
+                return false;
             }
-        } else {
-            // Switch back to player turn
-            this.turn = 'player';
-            this.scene.events.emit('battle-turn-change', { turn: this.turn });
-        }
-    }
 
-    // Check if battle should end
-    checkBattleEnd() {
-        if (!this.isBattleActive || !this.player) {
+            const healed = monster.heal(item.value);
+            inventory.removeItem(itemName, 1);
+            this.addToLog(`Used ${itemName}. ${monster.name} recovered ${healed} HP.`);
+            this.scene.events.emit('battle-heal', {});
+            await this.wait(700);
             return true;
         }
 
-        const playerMonster = this.player.getCurrentMonster();
-        
-        // Check if wild monster is defeated
-        if (!this.wildMonster || !this.wildMonster.isAlive()) {
+        if (item.type === 'cure') {
+            if (!monster.status) {
+                this.addToLog(`${monster.name} has no status to cure.`);
+                await this.wait(600);
+                return false;
+            }
+
+            monster.status = null;
+            inventory.removeItem(itemName, 1);
+            this.addToLog(`${monster.name} is back to normal.`);
+            await this.wait(700);
+            return true;
+        }
+
+        if (item.type === 'ball') {
+            return this.tryCatch(itemName);
+        }
+
+        return false;
+    }
+
+    async switchMonster(index) {
+        const target = this.player.getAllMonsters()[index];
+
+        if (!target || !target.isAlive() || index === this.player.currentMonsterIndex) {
+            return false;
+        }
+
+        this.player.getCurrentMonster()?.resetBattleState();
+        this.player.currentMonsterIndex = index;
+
+        this.addToLog(`Go, ${target.name}!`);
+        this.scene.events.emit('battle-monster-switch', { player: this.player });
+        await this.wait(600);
+
+        return true;
+    }
+
+    // --- turn bookkeeping ---------------------------------------------------
+
+    async endOfTurn() {
+        for (const monster of [this.player.getCurrentMonster(), this.wildMonster]) {
+            if (!monster || !monster.isAlive()) continue;
+
+            const message = monster.applyEndOfTurnStatus();
+            if (message) {
+                this.addToLog(message);
+                this.scene.events.emit('battle-damage', { target: monster });
+                await this.wait(600);
+            }
+        }
+
+        await this.checkFaintedAndMaybeEnd();
+    }
+
+    // Returns true when the battle is over or waiting on a replacement
+    async checkFaintedAndMaybeEnd() {
+        if (!this.isBattleActive) return true;
+
+        if (!this.wildMonster.isAlive()) {
+            this.addToLog(`Wild ${this.wildMonster.name} fainted!`);
+            await this.wait(600);
+            await this.awardSpoils();
             this.endBattle('win');
             return true;
         }
 
-        // Check if player monster is defeated
-        if (!playerMonster || !playerMonster.isAlive()) {
-            // Check if player has other monsters
-            const aliveMonsters = this.player.getAllMonsters().filter(m => m.isAlive());
-            if (aliveMonsters.length === 0) {
+        const mine = this.player.getCurrentMonster();
+        if (mine && !mine.isAlive()) {
+            this.addToLog(`${mine.name} fainted!`);
+            this.scene.events.emit('battle-monster-faint', { player: this.player });
+            await this.wait(700);
+
+            if (!this.player.hasHealthyMonster()) {
                 this.endBattle('lose');
                 return true;
             }
+
+            // Send out the next healthy monster automatically
+            const next = this.player.getFirstHealthyIndex();
+            this.player.currentMonsterIndex = next;
+            const replacement = this.player.getCurrentMonster();
+            replacement.resetBattleState();
+
+            this.addToLog(`Go, ${replacement.name}!`);
+            this.scene.events.emit('battle-monster-switch', { player: this.player });
+            await this.wait(600);
         }
 
         return false;
     }
 
-    // End the battle
-    endBattle(result) {
-        this.isBattleActive = false;
-        
-        this.scene.events.emit('battle-end', {
-            result: result,
-            player: this.player
-        });
+    async awardSpoils() {
+        const monster = this.player.getCurrentMonster();
+        const wild = this.wildMonster;
 
-        // Reset state
+        const coins = CONFIG.COINS_PER_WIN_BASE + wild.level * CONFIG.COINS_PER_WIN_PER_LEVEL;
+        this.player.addCoins(coins);
+        this.addToLog(`You found ${coins} coins!`);
+
+        if (!monster || !monster.isAlive()) return;
+
+        const gained = Math.floor(getSpecies(wild.name).exp * wild.level / 4) + 5;
+        this.addToLog(`${monster.name} gained ${gained} EXP.`);
+
+        const events = monster.gainExp(gained);
+        for (const event of events) {
+            if (event.kind === 'level-up') {
+                this.addToLog(`${monster.name} grew to Lv.${event.level}!`);
+                this.scene.events.emit('monster-levelup', { monster });
+            } else if (event.kind === 'move-learned') {
+                this.addToLog(event.forgotten
+                    ? `${monster.name} learned ${event.move}, forgetting ${event.forgotten}.`
+                    : `${monster.name} learned ${event.move}!`);
+            } else if (event.kind === 'evolved') {
+                this.addToLog(`${event.from} evolved into ${event.to}!`);
+                this.player.recordCaught(event.to);
+                this.scene.events.emit('monster-evolved', { monster, from: event.from });
+            }
+            await this.wait(700);
+        }
+    }
+
+    endBattle(result) {
+        if (!this.isBattleActive) return;
+
+        this.isBattleActive = false;
+        this.player.getAllMonsters().forEach(monster => monster.resetBattleState());
+
+        this.scene.events.emit('battle-end', { result, player: this.player });
+
         this.wildMonster = null;
         this.player = null;
         this.turn = 'player';
-        this.catchAttempts = 0;
     }
 
-    // Add message to battle log
     addToLog(message) {
         this.battleLog.push(message);
-        
-        // Keep log size reasonable
-        if (this.battleLog.length > 10) {
-            this.battleLog.shift();
-        }
-        
-        this.scene.events.emit('battle-log-update', {
-            log: this.battleLog
-        });
+        if (this.battleLog.length > 30) this.battleLog.shift();
+
+        this.scene.events.emit('battle-log-update', { log: this.battleLog });
     }
 
-    // Get battle log
-    getBattleLog() {
-        return this.battleLog;
-    }
-
-    // Get current turn
-    getCurrentTurn() {
-        return this.turn;
-    }
-
-    // Is battle active
     isActive() {
         return this.isBattleActive;
-    }
-
-    // Switch player's current monster
-    switchMonster(index) {
-        if (index >= 0 && index < this.player.getAllMonsters().length) {
-            this.player.currentMonsterIndex = index;
-            this.scene.events.emit('battle-monster-switch', {
-                player: this.player,
-                newMonster: this.player.getCurrentMonster()
-            });
-            
-            // After switching, continue enemy turn
-            this.turn = 'enemy';
-            this.scene.events.emit('battle-turn-change', { turn: this.turn });
-            
-            this.timerScene.time.delayedCall(1000, () => {
-                if (this.isBattleActive) {
-                    this.enemyTurn();
-                }
-            });
-
-            return true;
-        }
-        return false;
     }
 }

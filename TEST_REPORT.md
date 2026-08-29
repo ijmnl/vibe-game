@@ -107,3 +107,70 @@ Volledige doorloop op een geëmuleerde iPhone 13, zonder fouten in de console:
 De eigen testpagina (`test/index.html`): **26 tests, 0 gefaald**. De ene
 waarschuwing ("Phaser.js not loaded in test environment") is verwacht - die
 pagina laadt alleen de spelmodules, niet Phaser zelf.
+
+
+---
+
+# 🎮 Tweede ronde: het spel afmaken
+
+Na de reparatie draaide het spel wel, maar het was nog kaal: gekleurde blokjes,
+geen geluid, en gevechten waarvan de uitkomst vooral toeval was. "Aanvallen"
+koos namelijk elke beurt een **willekeurig** type, dus een Slime kon zomaar
+"Grass" gebruiken. En als je vijf ballen op waren, kon je nooit meer iets
+vangen - er was geen enkele manier om er meer te krijgen.
+
+## Wat erbij is gekomen
+
+| Onderwerp | Voor | Na |
+|-----------|------|-----|
+| Grafisch | Gekleurde rechthoeken | 20 pixel-art monsters, een lopende speler in 4 richtingen, dorpstegels |
+| Types | Willekeurig per exemplaar | Vast per soort, met een volledige 6x6 tabel |
+| Aanvallen | Willekeurig type, geen keuze | Kies uit maximaal 4 aanvallen, met kracht, precisie en effecten |
+| Statussen | Gedefinieerd maar nooit gebruikt | Brandwond, gif, verlamming en slaap werken |
+| Team | Maximaal 3 | Maximaal 6, wisselen tijdens gevecht |
+| Genezen | Alleen door te verliezen | Gratis geneespunt in elk dorp |
+| Ballen | 5 stuks, daarna nooit meer | Munten uit gevechten, winkel in elk dorp |
+| Vangen | Hard af na 3 pogingen | Kans op basis van HP, status, level en balsoort |
+| Voortgang | Geen doel | Monsterdex (20 te vangen), evoluties, een legendarisch monster |
+| Moeilijkheid | Overal level 1-5 | Levels lopen op met de afstand tot je startdorp |
+| Geluid | `AudioManager` bestond, werd nooit aangeroepen | Muziek per zone, gevechtsmuziek, effecten, geluidsknop |
+
+## Wat het testen opleverde
+
+Het spel is uitgespeeld in een echte browser op geëmuleerde telefoons. Wat
+daarbij naar boven kwam:
+
+- **Een val in de winkel.** De winkel ging weer open zodra je hem sloot, omdat
+  je nog op de tegel stond. Je kon er niet meer uit.
+- **Schade stond veel te hoog.** Een Bird van level 7 deed **121 schade** aan
+  een starter met 61 HP - dood in één klap. De vermenigvuldigers stapelden
+  (1,5x eigen type x 2x effectief x 1,5x kritiek = 4,5x). Nu doet een gewone
+  klap ongeveer een vijfde van een levensbalk.
+- **De openingsregel van het gevechtslog verdween altijd**, omdat het paneel
+  het logvenster leegde nadat die regel er al in stond.
+- **Het gevechtsscherm zat achter een zwarte sluier** van 75%, waardoor alle
+  sprites er grauw uitzagen.
+- **Liggend paste het niet.** Nu staat het paneel rechts en staan de monsters
+  ernaast in plaats van erboven.
+- **Doodlopende gevechten.** Een eigen test controleert of elk monster wel
+  ergens neutrale schade mee kan doen. Die vond er twee: een Bird die alleen
+  nog Electric-aanvallen had, en een Turtle die zijn enige neutrale aanval
+  kwijtraakte aan de limiet van vier aanvallen. Pyrefox kon een Golem
+  helemaal geen schade doen: Fire en Normal werden allebei weerstaan. Normal
+  is nu nergens meer zwak tegen.
+
+## Prestaties
+
+Nog steeds **60-61 fps** op iPhone 13, Pixel 5 en Galaxy S9+, ondanks alle
+nieuwe sprites en systemen.
+
+## Tests
+
+De testpagina (`test/index.html`) is uitgebreid van 26 naar **37 tests, 0
+gefaald**. Een deel daarvan controleert het spelontwerp in plaats van de code:
+of elke soort een compleet en kloppend profiel heeft, of elk dorp een
+geneespunt en een winkel krijgt, of je startplek begaanbaar is, en de twee
+controles hierboven die de doodlopende gevechten vonden.
+
+Spelregels gebruiken bewust geen `Phaser.Math` meer (zie
+`js/utils/MathUtils.js`), zodat ze te testen zijn zonder draaiend spel.

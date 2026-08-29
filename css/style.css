@@ -81,12 +81,21 @@ body {
     left: calc(10px + var(--safe-left));
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    background: rgba(0, 0, 0, 0.7);
-    padding: 8px;
-    border-radius: 4px;
+    gap: 5px;
+    background: rgba(0, 0, 0, 0.72);
+    padding: 8px 10px;
+    border-radius: 6px;
     font-size: 10px;
     line-height: 1.5;
+}
+
+.muted { opacity: 0.62; }
+
+.coins {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--accent);
 }
 
 /* Touch controls */
@@ -158,7 +167,9 @@ body {
 #battle-ui {
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.75);
+    /* No dimming veil: the battle scene paints its own backdrop, and a black
+       overlay here washed the monster sprites out. */
+    background: transparent;
     display: flex;
     justify-content: center;
     align-items: flex-end;
@@ -187,7 +198,7 @@ body {
     gap: 8px;
 }
 
-.enemy-info, .player-info {
+.combatant {
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -196,12 +207,31 @@ body {
     border-radius: 8px;
 }
 
+.combatant.mine {
+    border-left: 3px solid var(--accent);
+}
+
+.hp-readout {
+    font-size: 8px;
+    text-align: right;
+}
+
+.status-chip {
+    font-size: 8px;
+    color: #1a1a2e;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-weight: bold;
+}
+
 .monster-meta {
     display: flex;
-    justify-content: space-between;
-    gap: 10px;
+    align-items: center;
+    gap: 8px;
     font-size: 10px;
 }
+
+.monster-meta > :last-child { margin-left: auto; }
 
 .health-bar {
     width: 100%;
@@ -214,15 +244,171 @@ body {
 .health-fill {
     height: 100%;
     width: 100%;
-    background: linear-gradient(90deg, #00ff00, #44ff44);
-    transition: width 0.3s ease;
+    background: linear-gradient(90deg, #35c94a, #6ee87f);
+    transition: width 0.35s ease;
 }
+
+.health-fill.medium { background: linear-gradient(90deg, #e8a020, #ffc24a); }
+.health-fill.low    { background: linear-gradient(90deg, #d63b2a, #ff6a54); }
 
 .battle-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
 }
+
+.battle-btn.wide, .move-btn.wide { grid-column: 1 / -1; }
+
+.battle-btn.primary {
+    background: var(--accent);
+    color: #1a1a2e;
+    font-weight: bold;
+}
+
+.battle-subpanel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.battle-subpanel h3 {
+    margin: 0;
+    font-size: 10px;
+    color: var(--accent);
+}
+
+.move-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.move-btn {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
+    min-height: 52px;
+    padding: 9px 10px;
+    border: 2px solid var(--accent);
+    border-left-width: 6px;
+    border-radius: 8px;
+    background: var(--surface);
+    color: #fff;
+    font-family: inherit;
+    font-size: 9px;
+    text-align: left;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.move-btn:disabled { opacity: 0.45; }
+.move-name { font-size: 9px; line-height: 1.3; }
+.move-meta { font-size: 8px; opacity: 0.65; }
+
+/* Move buttons are colour-coded by type so matchups read at a glance */
+.move-btn[data-type="Normal"]   { border-left-color: #b8b8a8; }
+.move-btn[data-type="Fire"]     { border-left-color: #f0603c; }
+.move-btn[data-type="Water"]    { border-left-color: #4a90e2; }
+.move-btn[data-type="Grass"]    { border-left-color: #5cc45c; }
+.move-btn[data-type="Electric"] { border-left-color: #f6d02c; }
+.move-btn[data-type="Rock"]     { border-left-color: #b0a06a; }
+
+.scroll-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 150px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+}
+
+.scroll-list.tall, .monster-list.tall { max-height: 46vh; }
+
+.list-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 8px 11px;
+    background: var(--panel-soft);
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 9px;
+    line-height: 1.55;
+    text-align: left;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.list-row:disabled { opacity: 0.4; }
+.list-row .price { color: var(--accent); white-space: nowrap; }
+
+.panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.panel-head h2 { margin: 0; font-size: 13px; }
+
+.panel-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.panel-actions .battle-btn { flex: 1; }
+
+/* Team and dex rows with a sprite thumbnail */
+.monster-row, .dex-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: var(--panel-soft);
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.monster-row.active { outline: 2px solid var(--accent); }
+.dex-row.unknown { opacity: 0.45; }
+
+.monster-avatar {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 5px;
+}
+
+.monster-avatar canvas {
+    width: 30px;
+    height: 30px;
+    image-rendering: pixelated;
+}
+
+.monster-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+
+.monster-title {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 9px;
+}
+
+.monster-sub { font-size: 8px; }
+
+.health-bar.small { height: 7px; }
 
 .battle-btn {
     /* 44px keeps every action a comfortable thumb target */
@@ -287,8 +473,8 @@ body {
     border-radius: 3px;
 }
 
-/* Menu UI */
-#menu-ui {
+/* Menu, shop and dex overlays */
+#menu-ui, #shop-ui, #dex-ui {
     position: absolute;
     inset: 0;
     background: rgba(0, 0, 0, 0.9);
@@ -493,12 +679,26 @@ body {
     .dpad-down  { top: 100px; left: 50px; }
 
     .battle-log {
-        height: 76px;
+        height: 72px;
     }
+
+    .scroll-list { max-height: 128px; }
 }
 
 /* Landscape phones are short: keep the d-pad small and the panels compact */
 @media (max-height: 480px) and (orientation: landscape) {
+    /* Put the battle panel beside the monsters rather than under them -
+       there is no vertical room to stack both on a short screen. */
+    #battle-ui {
+        justify-content: flex-end;
+        align-items: center;
+    }
+
+    #battle-ui .battle-panel {
+        max-width: 56%;
+        max-height: 100%;
+    }
+
     #dpad {
         width: 132px;
         height: 132px;
@@ -515,15 +715,17 @@ body {
     .dpad-right { top: 44px; left: 88px; }
     .dpad-down  { top: 88px; left: 44px; }
 
-    .battle-actions {
-        grid-template-columns: repeat(4, 1fr);
+    .battle-actions, .move-grid {
+        grid-template-columns: repeat(3, 1fr);
     }
 
     .battle-log {
-        height: 56px;
+        height: 46px;
     }
 
-    .monster-list, .item-list {
-        max-height: 110px;
+    .monster-list, .item-list, .scroll-list {
+        max-height: 96px;
     }
+
+    .scroll-list.tall, .monster-list.tall { max-height: 38vh; }
 }

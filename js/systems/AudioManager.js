@@ -6,327 +6,187 @@
 class AudioManager {
     constructor() {
         this.context = null;
-        this.musicPlaying = false;
-        this.musicNode = null;
-        this.sfxNodes = [];
+        this.master = null;
+        this.musicGain = null;
+        this.musicVoices = [];
+        this.currentTrack = null;
+        this.muted = false;
         this.volume = 0.5;
-        this.musicVolume = 0.3;
-        this.sfxVolume = 0.7;
-        
-        // Create audio context on first interaction
+
         this.init();
     }
 
     init() {
-        // Create audio context
         try {
-            this.context = new (window.AudioContext || window.webkitAudioContext)();
+            const Context = window.AudioContext || window.webkitAudioContext;
+            this.context = new Context();
+
+            this.master = this.context.createGain();
+            this.master.gain.value = this.volume;
+            this.master.connect(this.context.destination);
+
+            this.musicGain = this.context.createGain();
+            this.musicGain.gain.value = 0.16;
+            this.musicGain.connect(this.master);
         } catch (e) {
-            console.warn('Web Audio API not supported:', e);
-            // Fallback to HTML5 audio
-            this.useFallback = true;
+            console.warn('Web Audio not available:', e);
         }
     }
 
-    // Play background music
-    playMusic(track = 'overworld') {
-        if (this.musicPlaying) {
-            this.stopMusic();
-        }
-
-        if (this.useFallback) {
-            this.playFallbackMusic(track);
-            return;
-        }
-
-        // Create oscillator for simple music
-        this.musicNode = this.createMusicTrack(track);
-        
-        // Create gain node for volume control
-        const gainNode = this.context.createGain();
-        gainNode.gain.value = this.musicVolume * this.volume;
-        
-        this.musicNode.connect(gainNode);
-        gainNode.connect(this.context.destination);
-        
-        this.musicPlaying = true;
+    get ready() {
+        return !!this.context && this.context.state === 'running' && !this.muted;
     }
 
-    createMusicTrack(track) {
-        // Create a simple procedural music track
-        const oscillator1 = this.context.createOscillator();
-        const oscillator2 = this.context.createOscillator();
-        const oscillator3 = this.context.createOscillator();
-        
-        const gain1 = this.context.createGain();
-        const gain2 = this.context.createGain();
-        const gain3 = this.context.createGain();
-        
-        // Set up oscillators based on track type
-        switch (track) {
-            case 'overworld':
-                oscillator1.frequency.setValueAtTime(261.63, this.context.currentTime); // C4
-                oscillator2.frequency.setValueAtTime(329.63, this.context.currentTime); // E4
-                oscillator3.frequency.setValueAtTime(392.00, this.context.currentTime); // G4
-                
-                oscillator1.type = 'sine';
-                oscillator2.type = 'sine';
-                oscillator3.type = 'sine';
-                
-                gain1.gain.setValueAtTime(0.3, this.context.currentTime);
-                gain2.gain.setValueAtTime(0.2, this.context.currentTime);
-                gain3.gain.setValueAtTime(0.1, this.context.currentTime);
-                break;
-                
-            case 'battle':
-                oscillator1.frequency.setValueAtTime(196.00, this.context.currentTime); // G3
-                oscillator2.frequency.setValueAtTime(246.94, this.context.currentTime); // B3
-                oscillator3.frequency.setValueAtTime(329.63, this.context.currentTime); // E4
-                
-                oscillator1.type = 'square';
-                oscillator2.type = 'square';
-                oscillator3.type = 'sawtooth';
-                
-                gain1.gain.setValueAtTime(0.2, this.context.currentTime);
-                gain2.gain.setValueAtTime(0.2, this.context.currentTime);
-                gain3.gain.setValueAtTime(0.15, this.context.currentTime);
-                break;
-                
-            case 'victory':
-                oscillator1.frequency.setValueAtTime(523.25, this.context.currentTime); // C5
-                oscillator2.frequency.setValueAtTime(659.25, this.context.currentTime); // E5
-                oscillator3.frequency.setValueAtTime(783.99, this.context.currentTime); // G5
-                
-                oscillator1.type = 'sine';
-                oscillator2.type = 'sine';
-                oscillator3.type = 'sine';
-                
-                gain1.gain.setValueAtTime(0.2, this.context.currentTime);
-                gain2.gain.setValueAtTime(0.15, this.context.currentTime);
-                gain3.gain.setValueAtTime(0.1, this.context.currentTime);
-                break;
+    // --- music --------------------------------------------------------------
+
+    // Each zone gets its own little loop, built from a short note sequence
+    static TRACKS = {
+        GRASS:   { notes: [262, 330, 392, 330, 294, 349, 440, 349], tempo: 0.34, wave: 'triangle' },
+        FOREST:  { notes: [220, 262, 330, 262, 196, 247, 294, 247], tempo: 0.40, wave: 'sine' },
+        WATER:   { notes: [294, 370, 440, 370, 330, 415, 494, 415], tempo: 0.44, wave: 'sine' },
+        CAVE:    { notes: [147, 175, 196, 175, 131, 165, 196, 165], tempo: 0.50, wave: 'triangle' },
+        SAND:    { notes: [233, 277, 349, 277, 208, 262, 311, 262], tempo: 0.38, wave: 'square' },
+        VILLAGE: { notes: [349, 440, 523, 440, 392, 494, 587, 494], tempo: 0.30, wave: 'triangle' },
+        BATTLE:  { notes: [330, 330, 392, 440, 392, 330, 294, 262], tempo: 0.19, wave: 'square' }
+    };
+
+    playZoneMusic(zone) {
+        this.playTrack(AudioManager.TRACKS[zone] ? zone : 'GRASS');
+    }
+
+    playBattleMusic() {
+        this.playTrack('BATTLE');
+    }
+
+    playTrack(name) {
+        if (!this.context || this.currentTrack === name) return;
+
+        this.currentTrack = name;
+        this.stopMusic();
+
+        if (this.muted || this.context.state !== 'running') return;
+
+        const track = AudioManager.TRACKS[name];
+        const startAt = this.context.currentTime + 0.05;
+        const loopLength = track.notes.length * track.tempo;
+
+        // Two passes are scheduled ahead and refreshed on a timer, which keeps
+        // the loop seamless without holding a node per note forever.
+        this.scheduleLoop(track, startAt, loopLength);
+        this.musicTimer = setInterval(() => {
+            if (this.currentTrack !== name || !this.ready) return;
+            this.scheduleLoop(track, this.context.currentTime + 0.05, loopLength);
+        }, loopLength * 1000);
+    }
+
+    scheduleLoop(track, startAt, loopLength) {
+        track.notes.forEach((frequency, index) => {
+            const oscillator = this.context.createOscillator();
+            const gain = this.context.createGain();
+
+            oscillator.type = track.wave;
+            oscillator.frequency.value = frequency;
+
+            const at = startAt + index * track.tempo;
+            gain.gain.setValueAtTime(0, at);
+            gain.gain.linearRampToValueAtTime(0.5, at + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.01, at + track.tempo * 0.9);
+
+            oscillator.connect(gain);
+            gain.connect(this.musicGain);
+            oscillator.start(at);
+            oscillator.stop(at + track.tempo);
+
+            this.musicVoices.push(oscillator);
+        });
+
+        // Drop references to notes that have already finished
+        if (this.musicVoices.length > 64) {
+            this.musicVoices = this.musicVoices.slice(-32);
         }
-        
-        // Connect oscillators
-        oscillator1.connect(gain1);
-        oscillator2.connect(gain2);
-        oscillator3.connect(gain3);
-        
-        oscillator1.start();
-        oscillator2.start();
-        oscillator3.start();
-        
-        // Create a master gain node
-        const masterGain = this.context.createGain();
-        gain1.connect(masterGain);
-        gain2.connect(masterGain);
-        gain3.connect(masterGain);
-        
-        return masterGain;
     }
 
-    playFallbackMusic(track) {
-        // Simple fallback using HTML5 audio
-        // In a real implementation, we'd have actual audio files
-        console.log('Playing fallback music:', track);
-    }
-
-    // Stop background music
     stopMusic() {
-        if (!this.musicPlaying) return;
+        clearInterval(this.musicTimer);
+        this.musicTimer = null;
 
-        if (this.musicNode) {
-            // Disconnect and stop all oscillators
-            // This is a simplified approach
-            this.musicNode.disconnect();
-            this.musicNode = null;
-        }
-
-        this.musicPlaying = false;
+        this.musicVoices.forEach(voice => {
+            try { voice.stop(); } catch (e) { /* already stopped */ }
+        });
+        this.musicVoices = [];
     }
 
-    // Play sound effect
-    playSFX(sfxType) {
-        if (this.useFallback) {
-            this.playFallbackSFX(sfxType);
-            return;
-        }
+    // --- sound effects ------------------------------------------------------
 
-        let oscillator = null;
-        let gainNode = null;
+    static SFX = {
+        attack:  { frequency: 320, to: 160, duration: 0.12, wave: 'square',   gain: 0.28 },
+        hit:     { frequency: 180, to: 70,  duration: 0.16, wave: 'sawtooth', gain: 0.30 },
+        faint:   { frequency: 300, to: 60,  duration: 0.45, wave: 'triangle', gain: 0.26 },
+        throw:   { frequency: 420, to: 700, duration: 0.18, wave: 'sine',     gain: 0.24 },
+        caught:  { frequency: 520, to: 880, duration: 0.30, wave: 'triangle', gain: 0.30 },
+        heal:    { frequency: 440, to: 880, duration: 0.28, wave: 'sine',     gain: 0.26 },
+        buy:     { frequency: 660, to: 990, duration: 0.14, wave: 'square',   gain: 0.22 },
+        shop:    { frequency: 392, to: 587, duration: 0.22, wave: 'triangle', gain: 0.22 },
+        victory: { frequency: 523, to: 1047, duration: 0.42, wave: 'square',  gain: 0.26 }
+    };
 
-        switch (sfxType) {
-            case 'attack':
-                oscillator = this.createAttackSound();
-                break;
-                
-            case 'catch':
-                oscillator = this.createCatchSound();
-                break;
-                
-            case 'levelup':
-                oscillator = this.createLevelUpSound();
-                break;
-                
-            case 'heal':
-                oscillator = this.createHealSound();
-                break;
-                
-            case 'encounter':
-                oscillator = this.createEncounterSound();
-                break;
-                
-            case 'run':
-                oscillator = this.createRunSound();
-                break;
-                
-            default:
-                oscillator = this.createBeepSound();
-        }
+    playSfx(name) {
+        if (!this.ready) return;
 
-        if (oscillator) {
-            gainNode = this.context.createGain();
-            gainNode.gain.setValueAtTime(this.sfxVolume * this.volume, this.context.currentTime);
-            
-            oscillator.connect(gainNode);
-            gainNode.connect(this.context.destination);
-            
-            this.sfxNodes.push({ oscillator, gainNode });
-            
-            // Clean up after sound finishes
-            oscillator.onended = () => {
-                this.cleanupSFX(oscillator, gainNode);
-            };
-            
-            oscillator.start();
-        }
-    }
+        const sfx = AudioManager.SFX[name];
+        if (!sfx) return;
 
-    createAttackSound() {
         const oscillator = this.context.createOscillator();
         const gain = this.context.createGain();
-        
-        oscillator.frequency.setValueAtTime(800, this.context.currentTime);
-        oscillator.frequency.exponentialRampToValueAtTime(100, this.context.currentTime + 0.1);
-        oscillator.type = 'sawtooth';
-        
-        gain.gain.setValueAtTime(0.5, this.context.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.context.currentTime + 0.1);
-        
+        const now = this.context.currentTime;
+
+        oscillator.type = sfx.wave;
+        oscillator.frequency.setValueAtTime(sfx.frequency, now);
+        oscillator.frequency.exponentialRampToValueAtTime(Math.max(30, sfx.to), now + sfx.duration);
+
+        gain.gain.setValueAtTime(sfx.gain, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + sfx.duration);
+
         oscillator.connect(gain);
-        
-        return oscillator;
+        gain.connect(this.master);
+        oscillator.start(now);
+        oscillator.stop(now + sfx.duration);
     }
 
-    createCatchSound() {
-        const oscillator = this.context.createOscillator();
-        
-        oscillator.frequency.setValueAtTime(1000, this.context.currentTime);
-        oscillator.frequency.setValueAtTime(1500, this.context.currentTime + 0.1);
-        oscillator.type = 'sine';
-        
-        return oscillator;
-    }
+    // --- controls -----------------------------------------------------------
 
-    createLevelUpSound() {
-        const oscillator1 = this.context.createOscillator();
-        const oscillator2 = this.context.createOscillator();
-        const gain = this.context.createGain();
-        
-        oscillator1.frequency.setValueAtTime(523.25, this.context.currentTime); // C5
-        oscillator2.frequency.setValueAtTime(783.99, this.context.currentTime); // G5
-        
-        oscillator1.type = 'sine';
-        oscillator2.type = 'sine';
-        
-        gain.gain.setValueAtTime(0.3, this.context.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.context.currentTime + 0.5);
-        
-        oscillator1.connect(gain);
-        oscillator2.connect(gain);
-        
-        oscillator1.start();
-        oscillator2.start();
-        
-        return oscillator1; // Return one, we'll clean up both
-    }
-
-    createHealSound() {
-        const oscillator = this.context.createOscillator();
-        
-        oscillator.frequency.setValueAtTime(440, this.context.currentTime);
-        oscillator.frequency.setValueAtTime(660, this.context.currentTime + 0.2);
-        oscillator.type = 'sine';
-        
-        return oscillator;
-    }
-
-    createEncounterSound() {
-        const oscillator = this.context.createOscillator();
-        
-        oscillator.frequency.setValueAtTime(200, this.context.currentTime);
-        oscillator.frequency.setValueAtTime(400, this.context.currentTime + 0.1);
-        oscillator.type = 'square';
-        
-        return oscillator;
-    }
-
-    createRunSound() {
-        const oscillator = this.context.createOscillator();
-        
-        oscillator.frequency.setValueAtTime(600, this.context.currentTime);
-        oscillator.frequency.setValueAtTime(300, this.context.currentTime + 0.1);
-        oscillator.type = 'triangle';
-        
-        return oscillator;
-    }
-
-    createBeepSound() {
-        const oscillator = this.context.createOscillator();
-        oscillator.frequency.setValueAtTime(880, this.context.currentTime);
-        oscillator.type = 'sine';
-        return oscillator;
-    }
-
-    cleanupSFX(oscillator, gainNode) {
-        const index = this.sfxNodes.findIndex(node => 
-            node.oscillator === oscillator && node.gainNode === gainNode
-        );
-        
-        if (index > -1) {
-            this.sfxNodes.splice(index, 1);
-        }
-        
-        try {
-            oscillator.disconnect();
-            gainNode.disconnect();
-        } catch (e) {
-            // Already disconnected
-        }
-    }
-
-    // Set master volume
-    setVolume(volume) {
-        this.volume = Math.max(0, Math.min(1, volume));
-        
-        if (this.musicPlaying && this.musicNode) {
-            // Would need to update all music nodes
-        }
-    }
-
-    // Set music volume
-    setMusicVolume(volume) {
-        this.musicVolume = Math.max(0, Math.min(1, volume));
-    }
-
-    // Set SFX volume
-    setSFXVolume(volume) {
-        this.sfxVolume = Math.max(0, Math.min(1, volume));
-    }
-
-    // Toggle mute
     toggleMute() {
-        this.volume = this.volume > 0 ? 0 : 0.5;
+        this.muted = !this.muted;
+
+        if (this.master) {
+            this.master.gain.value = this.muted ? 0 : this.volume;
+        }
+
+        if (this.muted) {
+            this.stopMusic();
+        } else {
+            const track = this.currentTrack;
+            this.currentTrack = null;
+            if (track) this.playTrack(track);
+        }
+
+        return this.muted;
+    }
+
+    setVolume(volume) {
+        this.volume = clamp(volume, 0, 1);
+        if (this.master && !this.muted) this.master.gain.value = this.volume;
+    }
+
+    // Called after the first user gesture; music cannot start before that
+    resume() {
+        if (!this.context) return Promise.resolve();
+
+        return this.context.resume().then(() => {
+            const track = this.currentTrack;
+            this.currentTrack = null;
+            if (track) this.playTrack(track);
+        }).catch(() => {});
     }
 }
 

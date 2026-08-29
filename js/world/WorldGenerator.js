@@ -2,6 +2,11 @@ class WorldGenerator {
     // Number of shade variants rendered per tile type in the tileset
     static TILE_VARIANTS = 4;
 
+    // Tile types the player cannot walk through
+    static SOLID_TILES = new Set([
+        'water', 'water_edge', 'forest_tree', 'cave_rock', 'sand_rock', 'village_wall'
+    ]);
+
     constructor() {
         this.worldWidth = CONFIG.WORLD_WIDTH;
         this.worldHeight = CONFIG.WORLD_HEIGHT;
@@ -10,6 +15,8 @@ class WorldGenerator {
         this.worldData = [];
         this.collisionMap = [];
         this.zoneMap = [];
+        this.villages = [];
+        this.lair = null;
     }
 
     // Generate the entire world
@@ -17,8 +24,90 @@ class WorldGenerator {
         this.generateZones();
         this.generateTerrain();
         this.generatePaths();
+        this.generateVillages();
+        this.generateLegendaryLair();
         this.generateCollisionMap();
         return this.worldData;
+    }
+
+    // Villages give somewhere to heal and restock. One always sits on the
+    // starting tile so the player meets the idea immediately.
+    generateVillages() {
+        this.villages = [];
+
+        const home = {
+            x: Math.floor(this.worldWidth / 2),
+            y: Math.floor(this.worldHeight / 2)
+        };
+
+        this.stampVillage(home.x, home.y, true);
+
+        // A ring of outposts far enough out to be worth walking to
+        const outposts = [
+            { x: home.x - 30, y: home.y - 8 },
+            { x: home.x + 29, y: home.y + 6 },
+            { x: home.x + 4,  y: home.y - 31 },
+            { x: home.x - 6,  y: home.y + 30 }
+        ];
+
+        outposts.forEach(spot => {
+            const x = clamp(spot.x, 6, this.worldWidth - 7);
+            const y = clamp(spot.y, 6, this.worldHeight - 7);
+            this.stampVillage(x, y, false);
+        });
+    }
+
+    // Lay a small plaza with a heal pad and a shop, and clear a way in
+    stampVillage(centerX, centerY, isHome) {
+        const radius = 4;
+
+        for (let y = centerY - radius; y <= centerY + radius; y++) {
+            for (let x = centerX - radius; x <= centerX + radius; x++) {
+                const tile = this.worldData[y]?.[x];
+                if (!tile) continue;
+
+                const edge = Math.abs(x - centerX) === radius || Math.abs(y - centerY) === radius;
+
+                tile.type = 'village_floor';
+                tile.zone = 'VILLAGE';
+                tile.variant = (x + y) % WorldGenerator.TILE_VARIANTS;
+
+                // Fenced corners, left open along the middle of each side
+                if (edge && Math.abs(x - centerX) > 1 && Math.abs(y - centerY) > 1) {
+                    tile.type = 'village_wall';
+                }
+            }
+        }
+
+        const healTile = this.worldData[centerY - 1]?.[centerX - 2];
+        if (healTile) healTile.type = 'village_heal';
+
+        const shopTile = this.worldData[centerY - 1]?.[centerX + 2];
+        if (shopTile) shopTile.type = 'village_shop';
+
+        this.villages.push({ x: centerX, y: centerY, isHome });
+    }
+
+    // The legendary waits in the far corner of the map
+    generateLegendaryLair() {
+        const x = this.worldWidth - 8;
+        const y = this.worldHeight - 8;
+
+        for (let dy = -3; dy <= 3; dy++) {
+            for (let dx = -3; dx <= 3; dx++) {
+                const tile = this.worldData[y + dy]?.[x + dx];
+                if (!tile) continue;
+
+                tile.zone = 'CAVE';
+                tile.type = Math.abs(dx) === 3 || Math.abs(dy) === 3 ? 'cave_rock' : 'cave';
+                tile.variant = (x + dx + y + dy) % WorldGenerator.TILE_VARIANTS;
+            }
+        }
+
+        const shrine = this.worldData[y]?.[x];
+        if (shrine) shrine.type = 'lair';
+
+        this.lair = { x, y };
     }
 
     // Divide world into zones
@@ -173,15 +262,7 @@ class WorldGenerator {
                 const tile = this.worldData[y][x];
                 
                 // Water, trees, rocks, and some other tiles are collidable
-                if (tile.type === 'water' || 
-                    tile.type === 'forest_tree' || 
-                    tile.type === 'cave_rock' ||
-                    tile.type === 'sand_rock' ||
-                    tile.type === 'water_edge') {
-                    this.collisionMap[y][x] = true;
-                } else {
-                    this.collisionMap[y][x] = false;
-                }
+                this.collisionMap[y][x] = WorldGenerator.SOLID_TILES.has(tile.type);
             }
         }
     }
@@ -255,10 +336,22 @@ class WorldGenerator {
 
     // Get spawn position for player
     getPlayerSpawnPosition() {
-        // Start in the center of the world
+        const home = this.villages.find(village => village.isHome)
+            || { x: Math.floor(this.worldWidth / 2), y: Math.floor(this.worldHeight / 2) };
+
         return {
-            x: Math.floor(this.worldWidth / 2) * this.tileSize,
-            y: Math.floor(this.worldHeight / 2) * this.tileSize
+            x: home.x * this.tileSize + this.tileSize / 2,
+            y: (home.y + 1) * this.tileSize + this.tileSize / 2
         };
+    }
+
+    // Nearest village to a tile, used to send a beaten player home
+    getNearestVillage(tileX, tileY) {
+        return this.villages.reduce((closest, village) => {
+            const distance = Math.hypot(village.x - tileX, village.y - tileY);
+            return !closest || distance < closest.distance
+                ? { ...village, distance }
+                : closest;
+        }, null);
     }
 }

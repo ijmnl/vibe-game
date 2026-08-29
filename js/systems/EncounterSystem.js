@@ -51,8 +51,9 @@ class EncounterSystem {
         this.encounterCooldown = CONFIG.ENCOUNTER_COOLDOWN;
         this.encounterActive = true;
 
-        // Create wild monster
-        const wildMonster = createWildMonster(zoneType);
+        // Wild level scales with how far this spot is from the home village
+        const tile = this.player.getTile();
+        const wildMonster = createWildMonster(zoneType, getWildLevelAt(tile.x, tile.y));
         
         // Show encounter notification
         this.scene.events.emit('encounter-notification', {

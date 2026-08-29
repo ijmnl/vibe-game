@@ -21,7 +21,12 @@ const TileTextures = {
         'cave_rock',
         'sand',
         'sand_rock',
-        'path'
+        'path',
+        'village_floor',
+        'village_wall',
+        'village_heal',
+        'village_shop',
+        'lair'
     ],
 
     BASE_COLORS: {
@@ -35,7 +40,12 @@ const TileTextures = {
         cave_rock: 0x5a5a5a,
         sand: 0xf4a460,
         sand_rock: 0xe0915a,
-        path: 0x8b4513
+        path: 0x8b4513,
+        village_floor: 0xc9b79a,
+        village_wall: 0x8a6a4a,
+        village_heal: 0xc9b79a,
+        village_shop: 0xc9b79a,
+        lair: 0x4a3550
     },
 
     // Tile index for a generated tile, or -1 when the type is unknown
@@ -97,6 +107,23 @@ const TileTextures = {
                 break;
             case 'path':
                 this.drawGravel(ctx, x, y, size, variant);
+                break;
+            case 'village_floor':
+                this.drawPaving(ctx, x, y, size);
+                break;
+            case 'village_wall':
+                this.drawFence(ctx, x, y, size);
+                break;
+            case 'village_heal':
+                this.drawPaving(ctx, x, y, size);
+                this.drawPad(ctx, x, y, size, '#ff5a7a', 'cross');
+                break;
+            case 'village_shop':
+                this.drawPaving(ctx, x, y, size);
+                this.drawPad(ctx, x, y, size, '#f6d02c', 'coin');
+                break;
+            case 'lair':
+                this.drawLair(ctx, x, y, size);
                 break;
         }
     },
@@ -175,10 +202,58 @@ const TileTextures = {
         }
     },
 
+    drawPaving(ctx, x, y, size) {
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.18)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, y + 0.5, size / 2 - 1, size / 2 - 1);
+        ctx.strokeRect(x + size / 2 + 0.5, y + size / 2 + 0.5, size / 2 - 1, size / 2 - 1);
+    },
+
+    drawFence(ctx, x, y, size) {
+        ctx.fillStyle = '#6b4a2a';
+        ctx.fillRect(x + size * 0.1, y + size * 0.25, size * 0.8, size * 0.12);
+        ctx.fillRect(x + size * 0.1, y + size * 0.6, size * 0.8, size * 0.12);
+        ctx.fillRect(x + size * 0.2, y + size * 0.15, size * 0.12, size * 0.7);
+        ctx.fillRect(x + size * 0.68, y + size * 0.15, size * 0.12, size * 0.7);
+    },
+
+    // The marker painted on a heal pad or a shop tile
+    drawPad(ctx, x, y, size, color, glyph) {
+        ctx.fillStyle = color;
+        ctx.fillRect(x + size * 0.12, y + size * 0.12, size * 0.76, size * 0.76);
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+        ctx.fillRect(x + size * 0.12, y + size * 0.78, size * 0.76, size * 0.1);
+
+        ctx.fillStyle = '#ffffff';
+        if (glyph === 'cross') {
+            ctx.fillRect(x + size * 0.42, y + size * 0.24, size * 0.16, size * 0.52);
+            ctx.fillRect(x + size * 0.24, y + size * 0.42, size * 0.52, size * 0.16);
+        } else {
+            ctx.beginPath();
+            ctx.ellipse(x + size * 0.5, y + size * 0.5, size * 0.2, size * 0.24, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = color;
+            ctx.fillRect(x + size * 0.46, y + size * 0.32, size * 0.08, size * 0.36);
+        }
+    },
+
+    drawLair(ctx, x, y, size) {
+        ctx.fillStyle = '#2a1c33';
+        ctx.beginPath();
+        ctx.ellipse(x + size * 0.5, y + size * 0.5, size * 0.36, size * 0.32, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#ff8a3c';
+        ctx.beginPath();
+        ctx.ellipse(x + size * 0.5, y + size * 0.5, size * 0.14, size * 0.12, 0, 0, Math.PI * 2);
+        ctx.fill();
+    },
+
     shiftColor(color, amount) {
-        const r = Phaser.Math.Clamp(((color >> 16) & 0xff) + amount, 0, 255);
-        const g = Phaser.Math.Clamp(((color >> 8) & 0xff) + amount, 0, 255);
-        const b = Phaser.Math.Clamp((color & 0xff) + amount, 0, 255);
+        const r = clamp(((color >> 16) & 0xff) + amount, 0, 255);
+        const g = clamp(((color >> 8) & 0xff) + amount, 0, 255);
+        const b = clamp((color & 0xff) + amount, 0, 255);
 
         return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
     }

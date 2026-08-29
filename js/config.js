@@ -21,53 +21,61 @@ const CONFIG = {
     ENCOUNTER_RATE_SCALE: 15, // Converts a zone's per-step rate into a per-second chance
     
     // Battle settings
-    MAX_MONSTERS_IN_TEAM: 3,
-    BASE_EXP: 20,
+    MAX_MONSTERS_IN_TEAM: 6,
+    // Divisor in the damage formula - lower hits harder. Tuned so a neutral
+    // hit costs about a fifth of a health bar, which leaves room for type
+    // advantage and crits to matter without one-shotting anything.
+    DAMAGE_SCALE: 26,
+    CRIT_CHANCE: 0.0625,
+    CRIT_MULTIPLIER: 1.4,
+    STAB_MULTIPLIER: 1.3,
+
+    // Levelling
+    MAX_LEVEL: 50,
+    EXP_BASE: 20,
+    EXP_PER_LEVEL: 9,
+
+    // Wild levels scale with distance from the starting village, so heading
+    // outwards is what makes the world get harder.
+    WILD_LEVEL_MIN: 2,
+    // Levels ramp gently near home and steepen further out, so the starting
+    // area stays fair while the map edges are a real challenge.
+    WILD_LEVEL_CURVE: 1.35,
+    WILD_LEVEL_DIVISOR: 8,
+
+    // Economy
+    STARTING_COINS: 50,
+    COINS_PER_WIN_BASE: 8,
+    COINS_PER_WIN_PER_LEVEL: 3,
     
-    // Monster settings
-    MONSTER_TYPES: ['Normal', 'Fire', 'Water', 'Grass', 'Electric', 'Rock'],
     
     // Zones
     ZONES: {
         GRASS: { name: 'Grassland', color: 0x2e8b57, encounterRate: 0.02, monsters: ['Slime', 'Rat', 'Bird'] },
-        FOREST: { name: 'Forest', color: 0x228b22, encounterRate: 0.03, monsters: ['Fox', 'Spider', 'Owl'] },
+        FOREST: { name: 'Forest', color: 0x228b22, encounterRate: 0.03, monsters: ['Fox', 'Spider', 'Owl', 'Snake'] },
         WATER: { name: 'Lake', color: 0x1e90ff, encounterRate: 0.025, monsters: ['Fish', 'Crab', 'Turtle'] },
         CAVE: { name: 'Cave', color: 0x696969, encounterRate: 0.015, monsters: ['Bat', 'Snake', 'Golem'] },
-        SAND: { name: 'Desert', color: 0xf4a460, encounterRate: 0.01, monsters: ['Scorpion', 'Vulture', 'Camel'] }
+        SAND: { name: 'Desert', color: 0xf4a460, encounterRate: 0.01, monsters: ['Scorpion', 'Vulture', 'Camel'] },
+        // Villages are safe: no encounterRate means EncounterSystem skips them
+        VILLAGE: { name: 'Village', color: 0xc9b79a, encounterRate: 0, monsters: [] }
     },
     
-    // Monster stats
-    MONSTER_BASE_STATS: {
-        'Slime': { hp: 30, attack: 8, defense: 5, speed: 10, exp: 15 },
-        'Rat': { hp: 25, attack: 10, defense: 3, speed: 15, exp: 12 },
-        'Bird': { hp: 20, attack: 12, defense: 2, speed: 20, exp: 14 },
-        'Fox': { hp: 35, attack: 12, defense: 6, speed: 14, exp: 20 },
-        'Spider': { hp: 28, attack: 14, defense: 4, speed: 12, exp: 18 },
-        'Owl': { hp: 25, attack: 10, defense: 5, speed: 18, exp: 16 },
-        'Fish': { hp: 30, attack: 8, defense: 8, speed: 10, exp: 15 },
-        'Crab': { hp: 40, attack: 12, defense: 10, speed: 8, exp: 22 },
-        'Turtle': { hp: 50, attack: 6, defense: 15, speed: 5, exp: 25 },
-        'Bat': { hp: 20, attack: 14, defense: 2, speed: 25, exp: 14 },
-        'Snake': { hp: 30, attack: 15, defense: 4, speed: 16, exp: 20 },
-        'Golem': { hp: 60, attack: 10, defense: 20, speed: 3, exp: 30 },
-        'Scorpion': { hp: 35, attack: 18, defense: 8, speed: 12, exp: 25 },
-        'Vulture': { hp: 40, attack: 14, defense: 6, speed: 10, exp: 22 },
-        'Camel': { hp: 55, attack: 8, defense: 12, speed: 6, exp: 28 }
-    },
     
-    // Items
+    // Items. `price` of 0 means it cannot be bought.
     ITEMS: {
-        'Potion': { type: 'heal', value: 20, description: 'Restores 20 HP' },
-        'Super Potion': { type: 'heal', value: 50, description: 'Restores 50 HP' },
-        'Monster Ball': { type: 'ball', catchRate: 0.5, description: 'Basic ball for catching monsters' },
-        'Super Ball': { type: 'ball', catchRate: 0.7, description: 'Better ball for catching monsters' },
-        'Ultra Ball': { type: 'ball', catchRate: 0.9, description: 'Best ball for catching monsters' }
+        'Potion':       { type: 'heal', value: 25,  price: 20,  description: 'Restores 25 HP' },
+        'Super Potion': { type: 'heal', value: 60,  price: 55,  description: 'Restores 60 HP' },
+        'Full Potion':  { type: 'heal', value: 999, price: 140, description: 'Fully restores HP' },
+        'Antidote':     { type: 'cure', price: 25,  description: 'Clears any status' },
+        'Monster Ball': { type: 'ball', catchRate: 1.0, price: 25,  description: 'Basic catching ball' },
+        'Super Ball':   { type: 'ball', catchRate: 1.5, price: 60,  description: 'Catches more reliably' },
+        'Ultra Ball':   { type: 'ball', catchRate: 2.2, price: 130, description: 'The best ball there is' }
     },
     
     // Starting items
     STARTING_ITEMS: [
-        { name: 'Potion', quantity: 3 },
-        { name: 'Monster Ball', quantity: 5 }
+        { name: 'Potion', quantity: 4 },
+        { name: 'Monster Ball', quantity: 8 }
     ],
     
     // Colors
@@ -94,12 +102,18 @@ function getRandomMonsterForZone(zoneType) {
     return monsters[randomIndex];
 }
 
-// Helper function to get monster stats
-function getMonsterStats(monsterName) {
-    return CONFIG.MONSTER_BASE_STATS[monsterName] || CONFIG.MONSTER_BASE_STATS['Slime'];
-}
+// Wild level for a spot, scaling with how far it is from the starting village
+function getWildLevelAt(tileX, tileY) {
+    const homeX = Math.floor(CONFIG.WORLD_WIDTH / 2);
+    const homeY = Math.floor(CONFIG.WORLD_HEIGHT / 2);
+    const distance = Math.hypot(tileX - homeX, tileY - homeY);
 
-// Helper function to generate a random level for wild monsters
-function getRandomWildLevel() {
-    return Math.floor(Math.random() * 5) + 1; // Level 1-5
+    const base = CONFIG.WILD_LEVEL_MIN
+        + Math.pow(distance / CONFIG.WILD_LEVEL_DIVISOR, CONFIG.WILD_LEVEL_CURVE);
+
+    // Spread widens with distance so the starting area is predictable
+    const spread = 1 + Math.floor(distance / 25);
+    const roll = randomInt(-spread, spread);
+
+    return clamp(Math.round(base + roll), 2, CONFIG.MAX_LEVEL);
 }

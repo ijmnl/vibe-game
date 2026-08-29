@@ -10,69 +10,61 @@ class WorldScene extends Phaser.Scene {
         this.minimap = null;
         this.cursors = null;
         this.wasd = null;
+        this.currentTileType = null;
+        this.currentZone = null;
     }
 
     create() {
-        // Generate world
         this.worldGenerator = new WorldGenerator();
         this.worldGenerator.generate();
 
-        // Create world graphics
+        SpriteFactory.build(this);
+        SpriteFactory.createAnimations(this);
+
         this.createWorld();
 
-        // Create player
-        const spawnPos = this.worldGenerator.getPlayerSpawnPosition();
-        this.player = new Player(this, spawnPos.x, spawnPos.y);
+        const spawn = this.worldGenerator.getPlayerSpawnPosition();
+        this.player = new Player(this, spawn.x, spawn.y);
 
-        // Create systems
         this.battleSystem = new BattleSystem(this);
         this.encounterSystem = new EncounterSystem(this);
         this.encounterSystem.init(this.player);
 
-        // Create UI
         this.uiManager = new UIManager(this);
         this.minimap = new Minimap(this, this.worldGenerator);
 
-        // Restore a previous session before anything reads the player state
         this.restoreSave();
 
-        // Set up camera
         this.setupCamera();
-
-        // Set up input
         this.setupInput();
-
-        // Set up event listeners
         this.setupEventListeners();
 
-        // Initial draw
         this.minimap.setPlayerPosition(this.player.getPosition());
-        this.uiManager.updatePlayerStats(this.player.getPosition());
-        this.uiManager.updatePlayerMonsterInfo();
+        this.uiManager.refreshHud();
 
-        // Keep the view usable when the phone rotates or the URL bar collapses
         this.scale.on('resize', this.handleResize, this);
-        this.events.once('shutdown', () => {
-            this.scale.off('resize', this.handleResize, this);
-        });
+        this.events.once('shutdown', () => this.scale.off('resize', this.handleResize, this));
 
         gameState.player = this.player;
         gameState.world = this.worldGenerator;
+
+        audioManager.playZoneMusic(this.player.getZone());
+
+        if (!gameState.saveData) {
+            this.uiManager.showMessage('Explore the grass to find monsters!', 3200);
+        }
     }
 
     restoreSave() {
-        const saveData = gameState.saveData;
-        if (!saveData) return;
-
-        this.player.loadSaveData(saveData);
+        if (gameState.saveData) {
+            this.player.loadSaveData(gameState.saveData);
+        }
     }
 
     createWorld() {
         const tilesetKey = TileTextures.ensureTexture(this);
-
-        // Convert the generated world into tile indices for one tilemap layer
-        const worldData = this.worldGenerator.worldData;
-        const indices = worldData.map(row => row.map(tile => TileTextures.indexFor(tile)));
+        const indices = this.worldGenerator.worldData
+            .map(row => row.map(tile => TileTextures.indexFor(tile)));
 
         this.map = this.make.tilemap({
             data: indices,
@@ -89,27 +81,20 @@ class WorldScene extends Phaser.Scene {
         const camera = this.cameras.main;
 
         camera.setBounds(
-            0,
-            0,
+            0, 0,
             this.worldGenerator.worldWidth * CONFIG.TILE_SIZE,
             this.worldGenerator.worldHeight * CONFIG.TILE_SIZE
         );
-
-        camera.startFollow(this.player.sprite, true, 0.1, 0.1);
+        camera.startFollow(this.player.sprite, true, 0.12, 0.12);
         camera.setZoom(this.getCameraZoom());
     }
 
-    // Show a comparable slice of the world regardless of screen size, so a
-    // phone is not left staring at four giant tiles.
+    // Show a comparable slice of the world regardless of screen size
     getCameraZoom() {
         const tilesAcross = 13;
-        const shortestSide = Math.min(this.scale.width, this.scale.height);
+        const shortest = Math.min(this.scale.width, this.scale.height);
 
-        return Phaser.Math.Clamp(
-            shortestSide / (tilesAcross * CONFIG.TILE_SIZE),
-            1,
-            3
-        );
+        return Phaser.Math.Clamp(shortest / (tilesAcross * CONFIG.TILE_SIZE), 1, 3);
     }
 
     handleResize() {
@@ -118,7 +103,6 @@ class WorldScene extends Phaser.Scene {
     }
 
     setupInput() {
-        // Keyboard: arrow keys plus WASD
         this.cursors = this.input.keyboard.createCursorKeys();
         this.wasd = this.input.keyboard.addKeys({
             up: Phaser.Input.Keyboard.KeyCodes.W,
@@ -129,59 +113,37 @@ class WorldScene extends Phaser.Scene {
     }
 
     setupEventListeners() {
-        // Battle start event
         this.events.on('encounter-start', (data) => {
             this.startBattle(data.player, data.wildMonster, data.zone);
         });
 
-        // Battle action event
         this.events.on('battle-action', (data) => {
-            this.handleBattleAction(data);
+            if (this.battleSystem?.isActive()) {
+                this.battleSystem.playerAction(data.action, data.payload);
+            }
         });
 
-        // Battle start from encounter
-        this.events.on('battle-start', () => {
-            this.player.stopMoving();
-        });
+        this.events.on('battle-start', () => this.player.stopMoving());
 
-        // Battle end
         this.events.on('battle-end', (data) => {
             this.player.stopMoving();
             this.encounterSystem.setEncounterActive(false);
 
             if (data.result === 'lose') {
-                // Player lost - go to game over
-                this.gameOver();
+                this.handleDefeat();
             }
-        });
 
-        // Monster level up
-        this.events.on('monster-levelup', (data) => {
-            this.uiManager.showMessage(`${data.monster.name} grew to Lv. ${data.monster.level}!`);
+            saveGame();
         });
     }
 
     startBattle(player, wildMonster, zone) {
-        // Stop the player drifting while the battle scene boots
         this.player.stopMoving();
         touchControls.reset();
+        audioManager.playBattleMusic();
 
-        // Switch to battle scene
-        this.scene.launch('BattleScene', {
-            player: player,
-            wildMonster: wildMonster,
-            zone: zone,
-            worldScene: this
-        });
-
-        // Pause world scene
+        this.scene.launch('BattleScene', { player, wildMonster, zone, worldScene: this });
         this.scene.pause();
-    }
-
-    handleBattleAction(data) {
-        if (this.battleSystem && this.battleSystem.isActive()) {
-            this.battleSystem.playerAction(data.action, data.item);
-        }
     }
 
     update(time, delta) {
@@ -190,9 +152,9 @@ class WorldScene extends Phaser.Scene {
         this.handlePlayerInput(delta);
         this.encounterSystem.update(delta);
         this.minimap.update();
+        this.checkTileUnderPlayer();
     }
 
-    // Which way the player wants to go this frame, from any input source
     getInputDirection() {
         if (this.cursors.left.isDown || this.wasd.left.isDown) return 'left';
         if (this.cursors.right.isDown || this.wasd.right.isDown) return 'right';
@@ -212,35 +174,92 @@ class WorldScene extends Phaser.Scene {
 
         this.player.move(direction, delta);
 
-        // Emit player move event for UI updates
-        const pos = this.player.getPosition();
-        this.events.emit('player-move', pos);
-        this.minimap.setPlayerPosition(pos);
+        const position = this.player.getPosition();
+        this.minimap.setPlayerPosition(position);
+        this.uiManager.updatePlayerStats(position);
     }
 
-    gameOver() {
-        // Show game over message
-        this.uiManager.showMessage('Game Over! All monsters fainted.', 5000);
+    // Heal pads, shops and the lair fire once when you step onto them
+    checkTileUnderPlayer() {
+        const tile = this.player.getTile();
+        const data = this.worldGenerator.getTileAt(tile.x, tile.y);
+        if (!data) return;
 
-        // Reset player position
-        const spawnPos = this.worldGenerator.getPlayerSpawnPosition();
-        this.player.sprite.x = spawnPos.x;
-        this.player.sprite.y = spawnPos.y;
+        if (data.zone !== this.currentZone) {
+            this.currentZone = data.zone;
+            audioManager.playZoneMusic(data.zone);
+            this.uiManager.refreshHud();
+        }
 
-        // Heal all monsters
-        this.player.getAllMonsters().forEach(monster => {
-            monster.hp = monster.maxHp;
+        if (data.type === this.currentTileType) return;
+        this.currentTileType = data.type;
+
+        switch (data.type) {
+            case 'village_heal':
+                this.player.healAll();
+                this.uiManager.refreshHud();
+                this.uiManager.showMessage('Your team is fully healed!', 2000);
+                audioManager.playSfx('heal');
+                saveGame();
+                break;
+
+            case 'village_shop':
+                this.uiManager.openShop();
+                break;
+
+            case 'lair':
+                this.triggerLegendary();
+                break;
+        }
+    }
+
+    triggerLegendary() {
+        if (gameState.legendaryDefeated) {
+            this.uiManager.showMessage('The shrine is quiet now.', 2000);
+            return;
+        }
+
+        const legendary = new Monster('Volcanor', 35, true);
+        this.uiManager.showMessage('The ground trembles...', 1600);
+
+        this.time.delayedCall(1600, () => {
+            this.startBattle(this.player, legendary, 'CAVE');
         });
-
-        // Update UI
-        this.uiManager.updatePlayerMonsterInfo();
     }
 
-    // Public method to resume world scene after battle
+    handleDefeat() {
+        const tile = this.player.getTile();
+        const village = this.worldGenerator.getNearestVillage(tile.x, tile.y);
+
+        this.player.healAll();
+
+        if (village) {
+            this.player.sprite.x = village.x * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 2;
+            this.player.sprite.y = (village.y + 1) * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 2;
+        }
+
+        // Losing costs coins rather than progress
+        const lost = Math.floor(this.player.coins * 0.25);
+        this.player.addCoins(-lost);
+
+        this.uiManager.refreshHud();
+        this.uiManager.showMessage(
+            `All your monsters fainted! You scurried back to the village${lost > 0 ? ` and dropped ${lost} coins` : ''}.`,
+            4000
+        );
+    }
+
     resumeWorld() {
         this.scene.resume();
         this.player.stopMoving();
         touchControls.reset();
-        this.uiManager.updatePlayerMonsterInfo();
+        this.uiManager.refreshHud();
+        audioManager.playZoneMusic(this.player.getZone());
+
+        // Do not immediately re-trigger the tile we are standing on
+        this.currentTileType = this.worldGenerator.getTileAt(
+            this.player.getTile().x,
+            this.player.getTile().y
+        )?.type ?? null;
     }
 }

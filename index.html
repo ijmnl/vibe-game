@@ -21,8 +21,9 @@
             <canvas id="minimap" width="150" height="150"></canvas>
         </div>
         <div id="player-stats">
-            <span id="player-position">X: 0, Y: 0</span>
-            <span id="player-zone">Zone: Grassland</span>
+            <span id="player-zone">Grassland</span>
+            <span id="player-position" class="muted">X:0 Y:0</span>
+            <span class="coins">💰 <span class="coin-count">0</span></span>
         </div>
 
         <div id="touch-controls" class="hidden">
@@ -38,52 +39,99 @@
         <div id="battle-ui" class="hidden">
             <div class="battle-panel">
                 <div class="combatants">
-                    <div class="enemy-info">
+                    <div class="combatant">
                         <div class="monster-meta">
                             <span id="enemy-name">Wild Monster</span>
-                            <span id="enemy-level">Lv. 5</span>
+                            <span id="enemy-status" class="status-chip hidden"></span>
+                            <span id="enemy-level" class="muted">Lv.5</span>
                         </div>
-                        <div class="health-bar">
-                            <div class="health-fill" id="enemy-health"></div>
-                        </div>
+                        <div class="health-bar"><div class="health-fill" id="enemy-health"></div></div>
                     </div>
-                    <div class="player-info">
+                    <div class="combatant mine">
                         <div class="monster-meta">
                             <span id="player-monster-name">Monster</span>
-                            <span id="player-monster-level">Lv. 5</span>
+                            <span id="player-status" class="status-chip hidden"></span>
+                            <span id="player-monster-level" class="muted">Lv.5</span>
                         </div>
-                        <div class="health-bar">
-                            <div class="health-fill" id="player-health"></div>
-                        </div>
+                        <div class="health-bar"><div class="health-fill" id="player-health"></div></div>
+                        <div class="hp-readout muted" id="player-hp">0/0</div>
                     </div>
                 </div>
+
                 <div id="battle-log" class="battle-log"></div>
-                <div class="battle-actions">
-                    <button id="attack-btn" class="battle-btn">Attack</button>
-                    <button id="catch-btn" class="battle-btn">Catch</button>
-                    <button id="run-btn" class="battle-btn">Run</button>
-                    <button id="use-item-btn" class="battle-btn">Use Item</button>
+
+                <div id="battle-main" class="battle-actions">
+                    <button id="fight-btn" class="battle-btn primary">Fight</button>
+                    <button id="bag-btn" class="battle-btn">Bag</button>
+                    <button id="team-btn" class="battle-btn">Team</button>
+                    <button id="catch-btn" class="battle-btn">Throw Ball</button>
+                    <button id="run-btn" class="battle-btn wide">Run</button>
                 </div>
-                <div id="battle-items" class="battle-items hidden">
-                    <h3>Choose an item</h3>
-                    <div id="battle-item-list" class="item-list"></div>
-                    <button id="cancel-item-btn" class="battle-btn">Back</button>
+
+                <div id="battle-moves" class="battle-subpanel hidden">
+                    <div id="move-buttons" class="move-grid"></div>
+                    <button id="moves-back-btn" class="battle-btn wide">Back</button>
+                </div>
+
+                <div id="battle-items" class="battle-subpanel hidden">
+                    <h3>Bag</h3>
+                    <div id="battle-item-list" class="scroll-list"></div>
+                    <button id="items-back-btn" class="battle-btn wide">Back</button>
+                </div>
+
+                <div id="battle-team" class="battle-subpanel hidden">
+                    <h3>Switch monster</h3>
+                    <div id="battle-team-list" class="scroll-list"></div>
+                    <button id="team-back-btn" class="battle-btn wide">Back</button>
                 </div>
             </div>
         </div>
 
         <div id="menu-ui" class="hidden">
             <div class="menu-panel">
-                <h2>Menu</h2>
+                <div class="panel-head">
+                    <h2>Menu</h2>
+                    <span class="coins">💰 <span class="coin-count">0</span></span>
+                </div>
                 <div class="menu-section">
-                    <h3>Monsters</h3>
+                    <h3>Team</h3>
                     <div id="monster-list" class="monster-list"></div>
                 </div>
                 <div class="menu-section">
-                    <h3>Items</h3>
-                    <div id="item-list" class="item-list"></div>
+                    <h3>Bag</h3>
+                    <div id="item-list" class="scroll-list"></div>
                 </div>
-                <button id="close-menu-btn">Close</button>
+                <div class="panel-actions">
+                    <button id="dex-btn" class="battle-btn">Monsterdex</button>
+                    <button id="mute-btn" class="battle-btn" aria-label="Sound">🔊</button>
+                    <button id="close-menu-btn" class="battle-btn primary">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="shop-ui" class="hidden">
+            <div class="menu-panel">
+                <div class="panel-head">
+                    <h2>Shop</h2>
+                    <span class="coins">💰 <span class="coin-count">0</span></span>
+                </div>
+                <div id="shop-list" class="scroll-list tall"></div>
+                <div class="panel-actions">
+                    <button id="close-shop-btn" class="battle-btn primary">Leave</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="dex-ui" class="hidden">
+            <div class="menu-panel">
+                <div class="panel-head">
+                    <h2>Monsterdex</h2>
+                    <span class="muted" id="dex-progress">0 / 0</span>
+                </div>
+                <div id="dex-list" class="monster-list tall"></div>
+                <div class="panel-actions">
+                    <button id="close-dex-btn" class="battle-btn primary">Close</button>
+                </div>
             </div>
         </div>
 
@@ -91,8 +139,13 @@
             <span>Wild Monster appeared!</span>
         </div>
     </div>
+    <script src="js/utils/MathUtils.js"></script>
     <script src="js/config.js"></script>
+    <script src="js/data/Types.js"></script>
+    <script src="js/data/Moves.js"></script>
+    <script src="js/data/Species.js"></script>
     <script src="js/systems/AudioManager.js"></script>
+    <script src="js/utils/SpriteFactory.js"></script>
     <script src="js/world/WorldGenerator.js"></script>
     <script src="js/world/TileTextures.js"></script>
     <script src="js/entities/Monster.js"></script>

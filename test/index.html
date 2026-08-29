@@ -239,9 +239,73 @@
             });
             
             runTest('Helper functions exist', () => {
-                if (typeof getRandomMonsterForZone !== 'function') throw new Error('getRandomMonsterForZone missing');
-                if (typeof getMonsterStats !== 'function') throw new Error('getMonsterStats missing');
-                if (typeof getRandomWildLevel !== 'function') throw new Error('getRandomWildLevel missing');
+                ['getRandomMonsterForZone', 'getSpecies', 'getMove', 'getMovesForLevel',
+                 'getTypeMultiplier', 'getWildLevelAt'].forEach(name => {
+                    if (typeof window[name] !== 'function') throw new Error(`${name} missing`);
+                });
+                return true;
+            });
+
+            runTest('Every species is complete and self-consistent', () => {
+                DEX_ORDER.forEach(name => {
+                    const species = getSpecies(name);
+                    if (!TYPES.includes(species.type)) return `${name} has an unknown type`;
+                    if (!species.moves.length) return `${name} has no moves`;
+                    species.moves.forEach(([, move]) => {
+                        if (!MOVES[move]) throw new Error(`${name} learns unknown move ${move}`);
+                    });
+                    if (species.evolvesTo && !SPECIES[species.evolvesTo]) {
+                        throw new Error(`${name} evolves into unknown ${species.evolvesTo}`);
+                    }
+                });
+                return true;
+            });
+
+            runTest('Every zone roster references real species', () => {
+                Object.entries(CONFIG.ZONES).forEach(([zone, data]) => {
+                    (data.monsters || []).forEach(name => {
+                        if (!SPECIES[name]) throw new Error(`${zone} lists unknown ${name}`);
+                    });
+                });
+                return true;
+            });
+
+            runTest('Type chart covers every pairing', () => {
+                TYPES.forEach(a => TYPES.forEach(b => {
+                    const value = TYPE_CHART[a]?.[b];
+                    if (typeof value !== 'number') throw new Error(`${a} vs ${b} is missing`);
+                }));
+                return true;
+            });
+
+            runTest('Every monster has a usable move against every type', () => {
+                // Guards against the dead matchups an all-resisted moveset creates
+                const dead = [];
+                DEX_ORDER.forEach(name => {
+                    const species = getSpecies(name);
+                    // An evolving species never exists past its evolution level
+                    const cap = species.evolvesTo ? species.evolvesAt - 1 : CONFIG.MAX_LEVEL;
+                    const moves = getMovesForLevel(name, cap).map(getMove);
+                    TYPES.forEach(defenderType => {
+                        const best = Math.max(...moves
+                            .filter(m => m.power > 0)
+                            .map(m => getTypeMultiplier(m.type, defenderType)));
+                        if (best < 1) dead.push(`${name} vs ${defenderType}`);
+                    });
+                });
+                if (dead.length) return `No neutral option: ${dead.slice(0, 3).join(', ')}`;
+                return true;
+            });
+
+            runTest('Every monster keeps at least two attacking moves', () => {
+                const thin = [];
+                DEX_ORDER.forEach(name => {
+                    const species = getSpecies(name);
+                    const cap = species.evolvesTo ? species.evolvesAt - 1 : CONFIG.MAX_LEVEL;
+                    const attacks = getMovesForLevel(name, cap).map(getMove).filter(m => m.power > 0);
+                    if (attacks.length < 2) thin.push(`${name} (${attacks.length})`);
+                });
+                if (thin.length) return `Too few attacks: ${thin.join(', ')}`;
                 return true;
             });
         }
@@ -283,6 +347,29 @@
                 if (!gen.collisionMap || gen.collisionMap.length === 0) throw new Error('No collision map');
                 return true;
             });
+
+            runTest('World has villages with a heal pad and a shop', () => {
+                const gen = new WorldGenerator();
+                gen.generate();
+                if (!gen.villages.length) throw new Error('No villages generated');
+
+                const types = new Set();
+                gen.worldData.forEach(row => row.forEach(tile => types.add(tile.type)));
+                ['village_heal', 'village_shop', 'lair'].forEach(type => {
+                    if (!types.has(type)) throw new Error(`Missing ${type} tile`);
+                });
+                return true;
+            });
+
+            runTest('The spawn point is walkable', () => {
+                const gen = new WorldGenerator();
+                gen.generate();
+                const spawn = gen.getPlayerSpawnPosition();
+                const tileX = Math.floor(spawn.x / CONFIG.TILE_SIZE);
+                const tileY = Math.floor(spawn.y / CONFIG.TILE_SIZE);
+                if (gen.isCollidable(tileX, tileY)) return 'Player would spawn inside a wall';
+                return true;
+            });
         }
 
         // Entity Tests
@@ -302,6 +389,28 @@
             runTest('Monster stats are valid', () => {
                 const monster = new Monster('Slime', 1, true);
                 if (!monster.name || !monster.level || !monster.hp) throw new Error('Monster missing properties');
+                if (monster.type !== getSpecies('Slime').type) return 'Type does not match the species';
+                return true;
+            });
+
+            runTest('Monsters level up, learn moves and evolve', () => {
+                const monster = new Monster('Slime', 15);
+                let evolved = false;
+                for (let i = 0; i < 30 && monster.level < 20; i++) {
+                    monster.gainExp(monster.expToLevel).forEach(e => {
+                        if (e.kind === 'evolved') evolved = true;
+                    });
+                }
+                if (!evolved) return 'Slime never evolved by level 20';
+                if (monster.name !== 'Oozer') return `Evolved into ${monster.name}`;
+                if (monster.moves.length > 4) return 'Kept more than four moves';
+                return true;
+            });
+
+            runTest('Wild levels rise with distance from home', () => {
+                const near = getWildLevelAt(50, 52);
+                const far = getWildLevelAt(50, 99);
+                if (far <= near) return `Far (${far}) is not above near (${near})`;
                 return true;
             });
         }
@@ -336,6 +445,24 @@
                 const oldHp = monster.hp;
                 monster.heal(5);
                 if (monster.hp <= oldHp) return 'HP did not increase after healing';
+                return true;
+            });
+
+            runTest('Status effects apply and wear off', () => {
+                const monster = new Monster('Slime', 10, true);
+                if (!monster.applyStatus('poison')) return 'Could not apply poison';
+                if (monster.applyStatus('burn')) return 'Allowed a second status';
+                const before = monster.hp;
+                monster.applyEndOfTurnStatus();
+                if (monster.hp >= before) return 'Poison did no damage';
+                return true;
+            });
+
+            runTest('Every item in the shop is buyable and defined', () => {
+                Object.entries(CONFIG.ITEMS).forEach(([name, item]) => {
+                    if (!item.type) throw new Error(`${name} has no type`);
+                    if (item.price === undefined) throw new Error(`${name} has no price`);
+                });
                 return true;
             });
         }
@@ -468,7 +595,11 @@
             
             // Load game files
             const scripts = [
+                '../js/utils/MathUtils.js',
                 '../js/config.js',
+                '../js/data/Types.js',
+                '../js/data/Moves.js',
+                '../js/data/Species.js',
                 '../js/world/WorldGenerator.js',
                 '../js/entities/Monster.js',
                 '../js/entities/Player.js',
@@ -476,6 +607,7 @@
                 '../js/systems/BattleSystem.js',
                 '../js/systems/EncounterSystem.js',
                 '../js/systems/AudioManager.js',
+                '../js/utils/SpriteFactory.js',
                 '../js/ui/Minimap.js',
                 '../js/ui/TouchControls.js',
                 '../js/ui/UIManager.js'

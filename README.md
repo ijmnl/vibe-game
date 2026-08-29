@@ -4,13 +4,17 @@ A Pokémon-inspired HTML5 game built with Phaser.js and modern JavaScript.
 
 ## 🎮 Game Features
 
-- **Open World**: Explore a large procedurally generated world with different zones (grassland, forest, water, cave, desert)
-- **Turn-Based Battles**: Fight wild monsters with your team of creatures
-- **Catch & Train**: Catch wild monsters and train them to become stronger
-- **Level Up System**: Gain experience and level up your monsters
-- **Inventory**: Use potions and monster balls strategically
-- **Minimap**: Keep track of your position in the world
-- **Modern Pixel Art**: Clean, colorful pixel art graphics
+- **20 monsters to collect**, each with a fixed type, its own pixel art, its own
+  learnset, and several with evolutions
+- **Turn-based battles with real choices**: pick from up to four moves, work the
+  type chart, land criticals, inflict burn, poison, paralysis and sleep
+- **Open world**: a procedurally generated map of grassland, forest, lakes,
+  caves and desert, with wild levels rising the further you roam
+- **Villages** with a heal pad and a shop, so you can patch up and restock
+- **Coins** from every win, spent on potions, antidotes and better balls
+- **Monsterdex** tracking what you have seen and caught - filling it is the goal
+- **A legendary** waiting in a lair in the far corner of the map
+- **Plays on a phone**: on-screen D-pad, portrait and landscape layouts
 
 ## 📱 Playing on your phone
 
@@ -41,18 +45,30 @@ Phaser is vendored in `vendor/`, so the game also runs offline and from a
 
 ## 🚀 How to Play
 
-1. **Movement**: On a phone, use the on-screen D-pad; on a desktop, the arrow
-   keys or WASD
-2. **Encounters**: Walk in tall grass, forests, water, or caves to encounter wild monsters
-3. **Battles**: 
-   - **Attack**: Deal damage to the wild monster
-   - **Catch**: Use monster balls to catch wild monsters
-   - **Run**: Try to escape from battle
-   - **Use Item**: Use potions to heal your monsters
-4. **Menu**: Tap the MENU button, or press ESC or M
-   - View your monsters
-   - Use items
-   - Switch active monster
+1. **Move**: the on-screen D-pad on a phone, or arrow keys / WASD on a desktop
+2. **Find monsters**: walk through grass, forest, caves and desert. Villages are
+   safe - nothing attacks you there
+3. **Battle**:
+   - **Fight** - choose one of your monster's moves. Types matter: Water beats
+     Fire and Rock, Grass beats Water and Rock, Fire beats Grass, Electric beats
+     Water, Rock beats Fire and Electric. Normal is never resisted
+   - **Throw Ball** - the weaker and more status-afflicted the target, the
+     better your odds
+   - **Bag** / **Team** - use an item, or switch monster
+   - **Run** - usually works, though not against everything
+4. **Level up**: monsters gain EXP, learn new moves, and some evolve
+5. **Villages**: step on the pink cross to heal your whole team for free, or the
+   gold coin to open the shop
+6. **Menu**: the MENU button, or ESC / M. Your team, your bag, the Monsterdex,
+   and a sound toggle
+
+### Tips
+
+- Weaken a monster before throwing a ball; a full-health target rarely stays in
+- Levels rise with distance from your home village, so push outwards gradually
+- Losing costs you a quarter of your coins and sends you back to a village -
+  never your monsters or your progress
+- Something is waiting in the far south-east corner of the map
 
 ## 📁 Project Structure
 
@@ -64,29 +80,35 @@ pokemon-game/
 ├── css/
 │   └── style.css          # Game styles
 ├── js/
-│   ├── config.js          # Game configuration
-│   ├── main.js            # Game initialization
+│   ├── config.js          # Tuning: damage, levels, economy, zones, items
+│   ├── main.js            # Game initialization and saving
+│   ├── data/
+│   │   ├── Types.js       # The six types and the effectiveness chart
+│   │   ├── Moves.js       # Move definitions and status effects
+│   │   └── Species.js     # Stats, types, learnsets, evolutions, dex numbers
 │   ├── entities/
-│   │   ├── Player.js      # Player class
-│   │   └── Monster.js     # Monster data and battle maths
+│   │   ├── Player.js      # Player, team, coins, Monsterdex
+│   │   └── Monster.js     # Stats, moves, status, levelling, evolution
 │   ├── systems/
 │   │   ├── BattleSystem.js
 │   │   ├── EncounterSystem.js
 │   │   ├── Inventory.js
-│   │   └── AudioManager.js
+│   │   └── AudioManager.js  # Procedural music and sound effects
 │   ├── world/
-│   │   ├── WorldGenerator.js
-│   │   └── TileTextures.js  # Bakes the tileset the world layer draws from
+│   │   ├── WorldGenerator.js  # Terrain, villages, the legendary lair
+│   │   └── TileTextures.js    # Bakes the tileset the world layer draws from
 │   ├── ui/
 │   │   ├── Minimap.js
-│   │   ├── TouchControls.js # On-screen D-pad for phones
-│   │   └── UIManager.js
+│   │   ├── TouchControls.js   # On-screen D-pad for phones
+│   │   └── UIManager.js       # HUD, battle panel, menu, shop, dex
 │   ├── scenes/
 │   │   ├── BootScene.js
 │   │   ├── WorldScene.js
 │   │   └── BattleScene.js
 │   └── utils/
-│       └── SpriteGenerator.js  # Unused for now; kept for future pixel art
+│       ├── MathUtils.js       # clamp/random, so game rules need no Phaser
+│       ├── SpriteFactory.js   # Draws all pixel art into Phaser textures
+│       └── SpriteGenerator.js # Older sprite experiments, unused
 └── test/
     └── index.html          # Open in a browser to run the smoke tests
 ```
@@ -101,9 +123,15 @@ Open `index.html` in your browser. No server and no internet connection
 required - Phaser is vendored in `vendor/`.
 
 ### Tests
-Open `test/index.html` in a browser. It loads the game modules, runs a set of
-smoke tests over config, world generation, entities, battles and inventory,
-and embeds the game itself.
+Open `test/index.html` in a browser. It loads the game modules and runs smoke
+tests over the config, world generation, entities, battles and inventory. Some
+of them are design checks rather than code checks - for instance, that every
+species keeps at least two attacking moves and has a move that is not resisted
+by any type. Those two caught real problems: a Bird whose moves were all
+Electric, and a Turtle that lost its only neutral attack to the four-move cap.
+
+Game rules deliberately avoid `Phaser.Math` (see `js/utils/MathUtils.js`) so the
+data and battle logic can be tested without a running game.
 
 ### Building
 For production, you might want to:
@@ -112,19 +140,27 @@ For production, you might want to:
 
 ## 🎨 Graphics
 
-The game uses programmatically generated pixel art for:
-- Player character (4 directions)
-- Monsters (various types)
-- Tiles (grass, water, forest, etc.)
-- Items (potions, balls)
+Every sprite is drawn at runtime by `js/utils/SpriteFactory.js`. Characters are
+described as 16x16 grids of single letters and scaled up, which keeps the art
+chunky and crisp instead of blurry:
 
-For better graphics, you can replace the generated sprites with actual pixel art images in the `assets/` folder.
+```
+'.....kkkkkk.....'   k = outline, c = cap, s = skin,
+'....kCCCCCCk....'   j = jacket, p = trousers, '.' = transparent
+```
+
+Monsters share a handful of body shapes (blob, quadruped, winged, serpent,
+arachnid, shelled, ...) recoloured per species, so adding a monster means adding
+a colour ramp and picking a shape. The world tileset is baked once into a single
+texture and drawn as one culled tilemap layer.
 
 ## 🎵 Audio
 
-The game uses the Web Audio API for procedural sound effects and music. For better audio, you can:
-1. Add actual audio files in `assets/audio/`
-2. Update the `AudioManager.js` to load and play these files
+All sound is synthesised at runtime with the Web Audio API - there are no audio
+files. Each zone has its own looping theme, battles switch to a faster one, and
+short blips cover hits, catches, healing and purchases. Mobile browsers only
+allow audio after a user gesture, so it starts on your first tap. There is a
+sound toggle in the menu.
 
 ## 💾 Saving
 
@@ -136,19 +172,16 @@ page - phones suspend background tabs, so an interval alone loses progress. Save
 
 ## 🔧 Configuration
 
-Edit `js/config.js` to customize:
-- World size and zones
-- Encounter rates
-- Monster stats
-- Items and their effects
-- Colors and appearance
+Edit `js/config.js` to tune the game: world size and zones, encounter rates,
+`DAMAGE_SCALE` (lower hits harder), the wild level curve, the economy, and the
+item list. Monsters themselves live in `js/data/Species.js` and moves in
+`js/data/Moves.js`.
 
 ## 🐛 Known Issues
 
-- The player and monsters are still coloured blocks; `SpriteGenerator.js` has
-  pixel art ready to be wired up
-- Water zones are impassable, so lake monsters can only be met at the shore
-- Some animations could be smoother
+- Water is impassable, so lake monsters are only met along the shore
+- The player always acts first in a battle; speed decides nothing yet
+- `js/utils/SpriteGenerator.js` is an older, unused experiment kept for reference
 
 ## 📝 License
 

@@ -29,7 +29,9 @@ const gameConfig = {
 const gameState = {
     player: null,
     world: null,
-    saveData: null
+    saveData: null,
+    legendaryDefeated: false,
+    dexCelebrated: false
 };
 
 const SAVE_KEY = 'pixelMonsterAdventureSave';
@@ -39,7 +41,11 @@ function saveGame() {
     if (!gameState.player) return;
 
     try {
-        localStorage.setItem(SAVE_KEY, JSON.stringify(gameState.player.getSaveData()));
+        localStorage.setItem(SAVE_KEY, JSON.stringify({
+            ...gameState.player.getSaveData(),
+            legendaryDefeated: gameState.legendaryDefeated,
+            dexCelebrated: gameState.dexCelebrated
+        }));
     } catch (e) {
         // Private browsing on iOS can refuse writes - not worth breaking play over
         console.warn('Could not save game:', e);
@@ -53,6 +59,9 @@ function loadGame() {
         if (!saveData) return null;
 
         gameState.saveData = JSON.parse(saveData);
+        gameState.legendaryDefeated = !!gameState.saveData.legendaryDefeated;
+        gameState.dexCelebrated = !!gameState.saveData.dexCelebrated;
+
         return gameState.saveData;
     } catch (e) {
         console.warn('Error loading save:', e);
@@ -93,10 +102,17 @@ window.addEventListener('pagehide', saveGame);
 
 // Mobile browsers only allow audio to start from a user gesture
 function unlockAudio() {
-    if (audioManager.context && audioManager.context.state === 'suspended') {
-        audioManager.context.resume().catch(() => {});
-    }
+    audioManager.resume();
 }
 
 document.addEventListener('pointerdown', unlockAudio, { once: true });
 document.addEventListener('keydown', unlockAudio, { once: true });
+
+// Pause the music while the game is in the background
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+        audioManager.stopMusic();
+    } else {
+        audioManager.resume();
+    }
+});
