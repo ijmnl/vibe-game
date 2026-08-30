@@ -406,6 +406,11 @@ body {
 .move-name { font-size: 9px; line-height: 1.3; }
 .move-meta { font-size: 8px; opacity: 0.65; }
 
+/* Effectiveness marker against whatever is currently out */
+.hint { margin-left: 4px; font-size: 8px; }
+.hint.good { color: #6ee87f; }
+.hint.bad  { color: #ff8a7a; }
+
 /* Move buttons are colour-coded by type so matchups read at a glance */
 .move-btn[data-type="Normal"]   { border-left-color: #b8b8a8; }
 .move-btn[data-type="Fire"]     { border-left-color: #f0603c; }
@@ -509,6 +514,31 @@ body {
 .monster-sub { font-size: 8px; }
 
 .monster-row .exp-bar { height: 4px; }
+
+/* Reorder arrows on each team row */
+.reorder {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 0 0 auto;
+}
+
+.reorder-btn {
+    width: 30px;
+    height: 22px;
+    padding: 0;
+    background: var(--surface);
+    color: #fff;
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    font-size: 9px;
+    line-height: 1;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.reorder-btn:disabled { opacity: 0.25; }
+.reorder-btn:active { background: var(--accent); color: #1a1a2e; }
 
 .health-bar.small { height: 7px; }
 
@@ -615,11 +645,16 @@ body {
     margin: 0 0 10px;
 }
 
+.section-hint { font-size: 8px; font-weight: normal; }
+
+.monster-row.fainted { opacity: 0.5; }
+
 .monster-list, .item-list {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    max-height: 180px;
+    /* Rows carry a sprite, health and EXP now, so give the list more room */
+    max-height: 250px;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-y;

@@ -530,6 +530,88 @@
                 return true;
             });
 
+            runTest('Turn order follows priority, then speed', () => {
+                const scene = { events: { emit: () => {} }, time: { delayedCall: () => {} } };
+                const battle = new BattleSystem(scene);
+
+                const slow = new Monster('Golem', 20);
+                const fast = new Monster('Bat', 20);
+                if (fast.effectiveSpeed() <= slow.effectiveSpeed()) return 'Bat is not faster than Golem';
+
+                const tackle = getMove('Tackle');
+                if (battle.playerMovesFirst(slow, tackle, fast, tackle)) {
+                    return 'The slower monster moved first';
+                }
+                if (!battle.playerMovesFirst(slow, getMove('Quick Jab'), fast, tackle)) {
+                    return 'Priority did not beat speed';
+                }
+                return true;
+            });
+
+            runTest('Paralysis halves speed', () => {
+                const monster = new Monster('Bat', 20);
+                const before = monster.effectiveSpeed();
+                monster.applyStatus('paralysis');
+                if (monster.effectiveSpeed() >= before) return 'Speed did not drop';
+                return true;
+            });
+
+            runTest('Every move has PP, and stronger moves have less', () => {
+                Object.entries(MOVES).forEach(([name, move]) => {
+                    if (typeof move.pp !== 'number' || move.pp <= 0) {
+                        throw new Error(`${name} has no usable PP`);
+                    }
+                });
+
+                if (MOVES['Inferno'].pp >= MOVES['Ember'].pp) {
+                    return 'The strongest Fire move is not the scarcest';
+                }
+                return true;
+            });
+
+            runTest('Running out of PP falls back to Struggle', () => {
+                const monster = new Monster('Fox', 30);
+                monster.moves.forEach(name => {
+                    while (monster.hasPp(name)) monster.spendPp(name);
+                });
+
+                if (!monster.isOutOfPp()) return 'Monster still reports PP left';
+
+                const usable = monster.getUsableMoves();
+                if (usable.length !== 1 || usable[0].name !== 'Struggle') {
+                    return `Offered ${usable.map(m => m.name).join(', ')} instead of Struggle`;
+                }
+                return true;
+            });
+
+            runTest('Resting at the nurse refills PP', () => {
+                const monster = new Monster('Fox', 30);
+                const move = monster.moves[0];
+                while (monster.hasPp(move)) monster.spendPp(move);
+
+                monster.fullHeal();
+                if (monster.getPp(move) !== getMove(move).pp) return 'PP was not restored';
+                return true;
+            });
+
+            runTest('The team can be reordered', () => {
+                const scene = { add: { sprite: () => ({ setOrigin(){return this;}, setDepth(){return this;},
+                    play(){return this;}, anims: {}, setPosition(){return this;} }) }, map: {} };
+                const player = Object.create(Player.prototype);
+                player.monsters = [new Monster('Slime', 5), new Monster('Rat', 5), new Monster('Fox', 5)];
+                player.currentMonsterIndex = 0;
+
+                if (!player.reorderMonster(2, -1)) return 'Reorder was refused';
+                if (player.monsters[1].name !== 'Fox') return 'Fox did not move up';
+
+                player.reorderMonster(1, -1);
+                if (player.monsters[0].name !== 'Fox') return 'Fox did not reach the front';
+
+                if (player.reorderMonster(0, -1)) return 'Moving past the front was allowed';
+                if (player.reorderMonster(2, 1)) return 'Moving past the back was allowed';
+                return true;
+            });
+
             runTest('Every item in the shop is buyable and defined', () => {
                 Object.entries(CONFIG.ITEMS).forEach(([name, item]) => {
                     if (!item.type) throw new Error(`${name} has no type`);

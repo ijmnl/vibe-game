@@ -154,6 +154,24 @@ class Player {
         return { success: true, monster: wild };
     }
 
+    // Move a monster up or down the team order. The first slot is the one
+    // that leads every battle, so this is how you choose your lead.
+    reorderMonster(index, direction) {
+        const target = index + direction;
+
+        if (index < 0 || index >= this.monsters.length) return false;
+        if (target < 0 || target >= this.monsters.length) return false;
+
+        const [moved] = this.monsters.splice(index, 1);
+        this.monsters.splice(target, 0, moved);
+
+        // Keep the highlighted monster pointing at the same creature
+        if (this.currentMonsterIndex === index) this.currentMonsterIndex = target;
+        else if (this.currentMonsterIndex === target) this.currentMonsterIndex = index;
+
+        return true;
+    }
+
     removeMonster(index) {
         if (index < 0 || index >= this.monsters.length) return false;
 

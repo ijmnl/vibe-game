@@ -20,6 +20,8 @@ class Monster {
 
         this.exp = 0;
         this.moves = getMovesForLevel(name, this.level);
+        this.pp = {};
+        this.refillPp();
 
         // Battle state, reset when a battle ends
         this.status = null;
@@ -61,6 +63,11 @@ class Monster {
         return Math.max(1, Math.floor(this[which] * multiplier));
     }
 
+    // Speed decides who moves first; paralysis halves it
+    effectiveSpeed() {
+        return Math.max(1, Math.floor(this.speed * (this.status === 'paralysis' ? 0.5 : 1)));
+    }
+
     changeStage(which, amount) {
         const before = this.stages[which] || 0;
         this.stages[which] = clamp(before + amount, -4, 4);
@@ -91,6 +98,7 @@ class Monster {
 
     fullHeal() {
         this.hp = this.maxHp;
+        this.refillPp();
         this.resetBattleState();
     }
 
@@ -144,13 +152,51 @@ class Monster {
         return `${this.name} is hurt by its ${label}! (-${damage})`;
     }
 
+    // --- move uses ----------------------------------------------------------
+
+    refillPp() {
+        this.moves.forEach(name => {
+            this.pp[name] = getMove(name).pp;
+        });
+    }
+
+    getPp(name) {
+        return this.pp[name] ?? getMove(name).pp;
+    }
+
+    hasPp(name) {
+        return this.getPp(name) > 0;
+    }
+
+    spendPp(name) {
+        if (this.pp[name] === undefined) this.pp[name] = getMove(name).pp;
+        if (this.pp[name] > 0) this.pp[name]--;
+    }
+
+    restorePp(name, amount) {
+        const max = getMove(name).pp;
+        this.pp[name] = Math.min(max, (this.pp[name] ?? 0) + amount);
+    }
+
+    // Every move exhausted: fall back to Struggle rather than stalling
+    isOutOfPp() {
+        return this.moves.every(name => !this.hasPp(name));
+    }
+
     getMoves() {
         return this.moves.map(getMove);
     }
 
+    // Only the moves that can actually be used this turn
+    getUsableMoves() {
+        const usable = this.moves.filter(name => this.hasPp(name));
+
+        return usable.length ? usable.map(getMove) : [getMove('Struggle')];
+    }
+
     // The AI picks the move with the best expected damage, with some slack
     chooseMove(target) {
-        const moves = this.getMoves();
+        const moves = this.getUsableMoves();
 
         const scored = moves.map(move => {
             if (!move.power) return { move, score: 12 };
@@ -185,7 +231,9 @@ class Monster {
             const learned = getMoveLearnedAt(this.name, this.level);
             if (learned && !this.moves.includes(learned)) {
                 this.moves.push(learned);
+                this.pp[learned] = getMove(learned).pp;
                 const forgotten = this.moves.length > 4 ? this.moves.shift() : null;
+                if (forgotten) delete this.pp[forgotten];
                 events.push({ kind: 'move-learned', move: learned, forgotten });
             }
 
@@ -201,6 +249,7 @@ class Monster {
     }
 
     evolveInto(name) {
+        // Evolution can bring new moves; they arrive with full PP below
         const hpRatio = this.hp / this.maxHp;
 
         this.name = name;
@@ -211,6 +260,10 @@ class Monster {
         // Pick up anything the new form should already know
         const learnset = getMovesForLevel(name, this.level);
         this.moves = [...new Set([...this.moves, ...learnset])].slice(-4);
+
+        this.moves.forEach(move => {
+            if (this.pp[move] === undefined) this.pp[move] = getMove(move).pp;
+        });
     }
 
     getSaveData() {
@@ -219,7 +272,8 @@ class Monster {
             level: this.level,
             hp: this.hp,
             exp: this.exp,
-            moves: this.moves
+            moves: this.moves,
+            pp: this.pp
         };
     }
 
@@ -230,6 +284,14 @@ class Monster {
         monster.exp = data.exp ?? 0;
         if (Array.isArray(data.moves) && data.moves.length) {
             monster.moves = data.moves.slice(-4);
+            monster.refillPp();
+        }
+
+        // Saves from before PP existed simply start full
+        if (data.pp) {
+            monster.moves.forEach(move => {
+                if (typeof data.pp[move] === 'number') monster.pp[move] = data.pp[move];
+            });
         }
 
         return monster;

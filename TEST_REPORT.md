@@ -259,3 +259,76 @@ Van 37 naar **38 tests, 0 gefaald**. Nieuw en bewust ontwerpgericht:
 - trainerteams gebruiken bestaande soorten binnen de levelband van hun route
 
 Prestaties onveranderd: **60-61 fps** op iPhone 13, Pixel 5 en Galaxy S9+.
+
+
+---
+
+# ⚔️ Vierde ronde: diepgang in de gevechten
+
+Feedback: het teamvolgorde wijzigen ontbrak, en de gevechten konden meer om het
+lijf hebben.
+
+## Teamvolgorde
+
+Pijltjes per teamlid in het menu. De ★ bovenaan gaat het volgende gevecht in.
+
+Daarbij viel iets op wat niet klopte: je kon een teamlid **aantikken** om het te
+selecteren, met een gele rand als bevestiging — maar dat had geen enkel effect,
+want `startBattle()` kiest altijd het eerste gezonde teamlid. De UI beloofde iets
+wat het spel negeerde. Het aantikken is eruit; de rand en de ster markeren nu
+allebei wie er écht vooraan staat.
+
+## Snelheid deed niets
+
+De speler was **altijd** als eerste aan zet. De `speed`-stat had daardoor geen
+enkele functie, en de `priority: 1` op Quick Jab was dode data die nooit werd
+gelezen.
+
+Nu bepalen prioriteit en snelheid wie eerst slaat, en verlamming halveert je
+snelheid. Gemeten over 200 vergelijkingen:
+
+| | resultaat |
+|---|---|
+| Snelste monster eerst (Bat 56 vs Golem 10) | 200/200 |
+| Quick Jab wint van hogere snelheid | 200/200 |
+| Verlamming: Bat 56 → 28 | ✓ |
+
+## Aanvallen zijn niet meer oneindig
+
+Elke aanval heeft nu een beperkt aantal beurten (PP). Sterke aanvallen hebben er
+het minst: Inferno 8, Ember 25. Op is op — daarna val je terug op **Struggle**,
+dat zwak is en jezelf ook pijn doet. De verpleegster in het dorp vult ze gratis
+weer aan, wat dorpen een echte functie geeft in plaats van alleen genezen.
+
+## Zichtbaarder
+
+- **Schadegetallen** stijgen op boven wie geraakt wordt, groter en goud bij een
+  kritieke treffer, oranje bij dubbele schade
+- **▲ / ▼ op de aanvalsknoppen** laten zien hoe die aanval valt bij het monster
+  dat tegenover je staat
+- **PP per aanval** op de knop, zodat je ziet wat er nog in zit
+- **Level omhoog** blijft langer staan (1,2s in plaats van 0,7s), evolueren 1,8s
+
+## Balans na de omslag
+
+Snelheidsvolgorde maakt gevechten zwaarder: de tegenstander kan nu vóór jou
+slaan. Opnieuw gemeten met 300 gesimuleerde gevechten per combinatie:
+
+| | winkans |
+|---|---|
+| Route 1, de meeste gevechten | 99-100% |
+| **Route 1, Slime tegen Bird** | **69%** |
+| Whisper Wood met de Fox | 100% |
+| Alle trainers, met een passend team | 96-100% |
+
+Die 69% is bewust blijven staan. Bird is snel én Electric, en Electric doet
+dubbele schade op Water — dus je Slime wordt geregeld verslagen. Je Rat wint dat
+gevecht wel (99%). Dat is precies de les die het typesysteem hoort te geven:
+wissel van monster in plaats van doorduwen.
+
+## Tests
+
+Van 38 naar **44 tests, 0 gefaald**. Nieuw: beurtvolgorde volgt prioriteit en
+dan snelheid, verlamming halveert snelheid, elke aanval heeft PP en sterkere
+aanvallen minder, leeg raken valt terug op Struggle, de verpleegster vult PP aan,
+en teamvolgorde wijzigen werkt inclusief de randgevallen aan begin en eind.

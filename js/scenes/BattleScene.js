@@ -276,6 +276,33 @@ class BattleScene extends Phaser.Scene {
         this.floatText(`${from} evolved!`, '#7fc4ff');
     }
 
+    // Damage rising off whoever was hit, so a big hit reads as a big hit
+    floatDamage(view, message, color, big) {
+        const label = this.add.text(
+            view.sprite.x + Phaser.Math.Between(-10, 10),
+            view.sprite.y - 8,
+            message,
+            {
+                fontFamily: 'monospace',
+                fontSize: big ? '20px' : '15px',
+                color,
+                stroke: '#000000',
+                strokeThickness: 4
+            }
+        );
+        label.setOrigin(0.5, 0.5);
+        label.setDepth(40);
+
+        this.tweens.add({
+            targets: label,
+            y: label.y - 26,
+            alpha: 0,
+            duration: 850,
+            ease: 'Quad.easeOut',
+            onComplete: () => label.destroy()
+        });
+    }
+
     floatText(message, color) {
         if (!this.playerView) return;
 
@@ -319,11 +346,20 @@ class BattleScene extends Phaser.Scene {
         });
     }
 
-    showDamageFlash({ isEnemy }) {
+    showDamageFlash({ isEnemy, amount, critical, effectiveness }) {
         const view = this.viewFor(isEnemy);
         if (!view) return;
 
         audioManager.playSfx('hit');
+
+        if (amount) {
+            const color = critical ? '#ffd166'
+                : effectiveness > 1 ? '#ff7a54'
+                : effectiveness < 1 ? '#9fb4c4'
+                : '#ffffff';
+
+            this.floatDamage(view, `-${amount}`, color, critical);
+        }
 
         this.tweens.add({
             targets: view.sprite,

@@ -111,7 +111,10 @@ class BattleSystem {
 
         switch (action) {
             case 'move':
-                await this.performPlayerMove(payload);
+                // The exchange resolves both sides in speed order, so the
+                // enemy turn is already included in it.
+                await this.resolveMoveExchange(payload);
+                playerActed = false;
                 break;
             case 'catch':
                 playerActed = await this.tryCatch(payload);
@@ -156,12 +159,51 @@ class BattleSystem {
         return { success: true };
     }
 
-    async performPlayerMove(moveName) {
-        const attacker = this.player.getCurrentMonster();
-        const defender = this.wildMonster;
-        const move = getMove(moveName);
+    // Both sides commit to a move, then act in order of priority and speed
+    async resolveMoveExchange(moveName) {
+        const mine = this.player.getCurrentMonster();
+        const theirs = this.wildMonster;
+        if (!mine || !theirs) return;
 
-        await this.performMove(attacker, defender, move, false);
+        // Out of PP entirely? Struggle instead of stalling.
+        const myMove = mine.isOutOfPp() ? getMove('Struggle') : getMove(moveName);
+        if (myMove.name !== 'Struggle') mine.spendPp(myMove.name);
+
+        const theirMove = theirs.chooseMove(mine);
+        if (theirMove.name !== 'Struggle') theirs.spendPp(theirMove.name);
+
+        const playerFirst = this.playerMovesFirst(mine, myMove, theirs, theirMove);
+
+        const sequence = playerFirst
+            ? [[mine, theirs, myMove, false], [theirs, mine, theirMove, true]]
+            : [[theirs, mine, theirMove, true], [mine, theirs, myMove, false]];
+
+        for (const [attacker, defender, move, isEnemy] of sequence) {
+            if (!this.isBattleActive) return;
+            if (!attacker.isAlive() || !defender.isAlive()) return;
+
+            this.setTurn(isEnemy ? 'enemy' : 'player');
+            await this.performMove(attacker, defender, move, isEnemy);
+
+            // A faint ends the exchange: the replacement does not get hit
+            // in the same round.
+            if (await this.checkFaintedAndMaybeEnd()) return;
+        }
+    }
+
+    // Higher priority wins, then higher speed, then a coin flip
+    playerMovesFirst(mine, myMove, theirs, theirMove) {
+        const myPriority = myMove.priority || 0;
+        const theirPriority = theirMove.priority || 0;
+
+        if (myPriority !== theirPriority) return myPriority > theirPriority;
+
+        const mySpeed = mine.effectiveSpeed();
+        const theirSpeed = theirs.effectiveSpeed();
+
+        if (mySpeed !== theirSpeed) return mySpeed > theirSpeed;
+
+        return Math.random() < 0.5;
     }
 
     async enemyTurn() {
@@ -203,11 +245,23 @@ class BattleSystem {
             const result = this.calculateDamage(attacker, defender, move);
             defender.takeDamage(result.damage);
 
-            this.scene.events.emit('battle-damage', { target: defender, isEnemy: !isEnemy });
+            this.scene.events.emit('battle-damage', {
+                target: defender,
+                isEnemy: !isEnemy,
+                amount: result.damage,
+                critical: result.critical,
+                effectiveness: result.multiplier
+            });
 
             if (result.critical) this.addToLog('A critical hit!');
             if (result.note) this.addToLog(result.note);
             this.addToLog(`${defender.name} took ${result.damage} damage.`);
+
+            if (move.recoil) {
+                const hurt = attacker.takeDamage(Math.max(1, Math.floor(result.damage * move.recoil)));
+                this.addToLog(`${label} is hit by recoil! (-${hurt})`);
+                this.scene.events.emit('battle-damage', { target: attacker, isEnemy, amount: hurt });
+            }
 
             if (move.effect?.kind === 'drain') {
                 const healed = attacker.heal(Math.floor(result.damage * move.effect.percent));
@@ -289,6 +343,7 @@ class BattleSystem {
         return {
             damage: Math.max(1, Math.floor(base * multiplier * stab * crit * variance * burn)),
             critical,
+            multiplier,
             note: describeEffectiveness(multiplier)
         };
     }
@@ -553,7 +608,12 @@ class BattleSystem {
                 this.player.recordCaught(event.to);
                 this.scene.events.emit('monster-evolved', { monster, from: event.from });
             }
-            await this.wait(700);
+
+            // Levelling and evolving deserve a beat to actually be seen
+            const pause = event.kind === 'level-up' ? 1200
+                : event.kind === 'evolved' ? 1800
+                : 900;
+            await this.wait(pause);
         }
     }
 

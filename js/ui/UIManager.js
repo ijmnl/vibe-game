@@ -226,15 +226,32 @@ class UIManager {
 
         this.moveButtons.innerHTML = '';
 
-        monster.getMoves().forEach(move => {
+        const opponent = this.scene.battleSystem.wildMonster;
+        const moves = monster.isOutOfPp() ? [getMove('Struggle')] : monster.getMoves();
+
+        moves.forEach(move => {
+            const pp = monster.getPp(move.name);
+            const empty = move.name !== 'Struggle' && pp <= 0;
+
+            // Show how this move lands on what is in front of you
+            const multiplier = opponent && move.power
+                ? getTypeMultiplier(move.type, opponent.type)
+                : 1;
+            const hint = multiplier > 1 ? '<span class="hint good">▲</span>'
+                : multiplier < 1 ? '<span class="hint bad">▼</span>'
+                : '';
+
             const button = document.createElement('button');
             button.className = 'move-btn';
             button.dataset.type = move.type;
+            button.disabled = empty;
             button.innerHTML = `
-                <span class="move-name">${move.name}</span>
-                <span class="move-meta">${move.type}${move.power ? ` &middot; ${move.power}` : ''}</span>
+                <span class="move-name">${move.name}${hint}</span>
+                <span class="move-meta">${move.type}${move.power ? ` &middot; ${move.power}` : ''}${
+                    move.name === 'Struggle' ? '' : ` &middot; ${pp}/${move.pp}`}</span>
             `;
             button.addEventListener('click', () => {
+                if (empty) return;
                 this.showBattlePanel('main');
                 this.emitAction('move', move.name);
             });
@@ -356,10 +373,16 @@ class UIManager {
         const player = this.scene.player;
         this.monsterList.innerHTML = '';
 
+        // The monster that will actually lead the next battle: the first one
+        // still standing. Highlighting anything else would be a lie, since
+        // startBattle() picks this one regardless of what is tapped.
+        const leadIndex = Math.max(0, player.getFirstHealthyIndex());
+
         player.getAllMonsters().forEach((monster, index) => {
             const row = document.createElement('div');
             row.className = 'monster-row';
-            if (index === player.currentMonsterIndex) row.classList.add('active');
+            if (index === leadIndex) row.classList.add('active');
+            if (!monster.isAlive()) row.classList.add('fainted');
 
             const percent = (monster.hp / monster.maxHp) * 100;
             const expPercent = Math.min(100, (monster.exp / monster.expToLevel) * 100);
@@ -368,7 +391,7 @@ class UIManager {
                 <div class="monster-avatar" data-key="${monster.getSpriteKey()}"></div>
                 <div class="monster-info">
                     <div class="monster-title">
-                        <span>${monster.name}</span>
+                        <span>${index === leadIndex ? '★ ' : ''}${monster.name}</span>
                         <span class="muted">Lv.${monster.level}</span>
                     </div>
                     <div class="health-bar small"><div class="health-fill" style="width:${percent}%"></div></div>
@@ -380,10 +403,26 @@ class UIManager {
                 </div>
             `;
 
-            row.addEventListener('click', () => {
-                player.currentMonsterIndex = index;
-                this.renderTeamList();
+            // Arrows to reorder; the top of the list leads the next battle
+            const controls = document.createElement('div');
+            controls.className = 'reorder';
+            controls.innerHTML = `
+                <button class="reorder-btn" data-move="up" ${index === 0 ? 'disabled' : ''} aria-label="Move up">▲</button>
+                <button class="reorder-btn" data-move="down" ${index === player.getAllMonsters().length - 1 ? 'disabled' : ''} aria-label="Move down">▼</button>
+            `;
+
+            controls.querySelectorAll('.reorder-btn').forEach(button => {
+                button.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    if (player.reorderMonster(index, button.dataset.move === 'up' ? -1 : 1)) {
+                        audioManager.playSfx('buy');
+                        this.renderTeamList();
+                        saveGame();
+                    }
+                });
             });
+
+            row.appendChild(controls);
 
             this.monsterList.appendChild(row);
         });

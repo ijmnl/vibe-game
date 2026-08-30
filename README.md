@@ -11,8 +11,10 @@ A Pokémon-inspired HTML5 game built with Phaser.js and modern JavaScript.
   with a full team. Beaten trainers stay beaten
 - **20 monsters to collect**, each with a fixed type, its own pixel art, its own
   learnset, and several with evolutions
-- **Turn-based battles with real choices**: pick from up to four moves, work the
-  type chart, land criticals, inflict burn, poison, paralysis and sleep
+- **Turn-based battles with real choices**: pick from up to four moves, each
+  with limited uses, work the type chart, land criticals, inflict burn, poison,
+  paralysis and sleep. Speed decides who swings first, and priority moves cut
+  ahead of it
 - **Encounters only in tall grass**, so the path is always the safe way through
 - **Villages** with a nurse who heals you free and a shopkeeper who restocks you
 - **Coins** from every win, spent on potions, antidotes and better balls
@@ -78,14 +80,20 @@ Phaser is vendored in `vendor/`, so the game also runs offline and from a
      better your odds. You cannot catch a trainer's monster
    - **Bag** / **Team** - use an item, or switch monster
    - **Run** - works on wild monsters. Trainers will not let you leave
-5. **Towns**: the nurse heals your whole team for free, the shopkeeper sells
-   potions and balls
-6. **Menu**: the MENU button, or ESC / M. Team, bag, Monsterdex, sound toggle
+5. **Towns**: the nurse restores your team's health *and* their move uses for
+   free; the shopkeeper sells potions and balls
+6. **Team order**: the ★ in the menu leads the next battle. Use the arrows to
+   move a monster up or down
+7. **Menu**: the MENU button, or ESC / M. Team, bag, Monsterdex, sound toggle
 
 ### Tips
 
 - Weaken a monster before throwing a ball; a full-health target rarely stays in
 - A type disadvantage is worth switching monster over, not powering through
+- The ▲ and ▼ on a move button say how it lands on what is in front of you
+- Strong moves have few uses. Save Inferno for something that deserves it -
+  run every move dry and you are left with Struggle, which hurts you too
+- A fast monster that moves first can win a fight it would otherwise lose
 - Trainers give far more EXP and coins than wild monsters
 - Losing costs a fifth of your coins and sends you back to the last town -
   never your monsters or your progress
@@ -208,8 +216,8 @@ Adding a route means adding one entry there and an exit on its neighbour.
 
 ## 🐛 Known Issues
 
-- The player always acts first in a battle; speed decides nothing yet
 - NPCs stand still; nobody walks around town
+- There is no way to swap a move out for a different one
 - `js/utils/SpriteGenerator.js` is an older, unused experiment kept for reference
 
 ## 📝 License
