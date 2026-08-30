@@ -24,11 +24,55 @@ const SpriteFactory = {
         'J': '#2c5580',       // jacket shade
         'p': '#3b4a5a',       // trousers
         'b': '#2a2f38',       // boots
-        // monster palette slots, filled per species
+        // monster palette slots, filled per species. The newer 32x32 grids use
+        // the full ramp; the older 16x16 ones only ever used 1-4.
         '1': '#888888',
         '2': '#666666',
         '3': '#aaaaaa',
         '4': '#ffffff'
+    },
+
+    // Blend two #rrggbb colours
+    blend(from, to, amount) {
+        const parse = (hex) => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+        const [r1, g1, b1] = parse(from);
+        const [r2, g2, b2] = parse(to);
+        const mix = (a, b) => Math.round(a + (b - a) * amount);
+
+        return `#${[mix(r1, r2), mix(g1, g2), mix(b1, b2)]
+            .map(v => v.toString(16).padStart(2, '0')).join('')}`;
+    },
+
+    /**
+     * The full tone ramp for one species, derived from the four colours it
+     * already has plus an optional fifth for its pale markings.
+     *
+     *   o  outline      5 2 1 3 6  body, dark to light      w  specular
+     *   a A B  markings (ear insides, muzzle, chest, tail tip)
+     *   e W    eye and its catchlight
+     */
+    monsterPalette(colors) {
+        const [base, dark, light, accent] = colors;
+        const marking = colors[4] || accent;
+        const BLACK = '#101220';
+        const WHITE = '#ffffff';
+
+        return {
+            ...this.PALETTE,
+            '1': base,
+            '2': dark,
+            '3': light,
+            '4': accent,
+            '5': this.blend(dark, BLACK, 0.28),
+            '6': this.blend(light, WHITE, 0.45),
+            'o': this.blend(dark, BLACK, 0.62),
+            'w': this.blend(light, WHITE, 0.82),
+            'a': this.blend(marking, BLACK, 0.42),
+            'A': marking,
+            'B': this.blend(marking, WHITE, 0.55),
+            'e': '#181c2c',
+            'W': WHITE
+        };
     },
 
     // ---------------------------------------------------------------- player
@@ -210,13 +254,13 @@ const SpriteFactory = {
 
     // Per-species colour ramp for palette slots 1-4
     MONSTER_COLORS: {
-        Slime:     ['#4fc3f7', '#2b8fc4', '#8fe0ff', '#ffffff'],
-        Oozer:     ['#2f7fd0', '#1c5390', '#63b4ff', '#d8f0ff'],
+        Slime:     ['#4fc3f7', '#2b8fc4', '#8fe0ff', '#ffffff', '#d2f0ff'],
+        Oozer:     ['#2f7fd0', '#1c5390', '#63b4ff', '#d8f0ff', '#bee2ff'],
         Rat:       ['#b08a5e', '#7d5f3c', '#d8bb90', '#ffffff'],
         Rattler:   ['#8d6a42', '#5c422a', '#c2a074', '#ffe9c4'],
         Bird:      ['#f6d02c', '#c9a316', '#ffe98a', '#ffffff'],
         Stormwing: ['#e8b800', '#9c7a00', '#ffe259', '#fff6c4'],
-        Fox:       ['#f0603c', '#b8402a', '#ff9a72', '#ffe0d0'],
+        Fox:       ['#f07a3c', '#b8402a', '#ffa672', '#ffe0d0', '#fce2c4'],
         Pyrefox:   ['#e03a1c', '#9c2410', '#ff7a48', '#ffd9a0'],
         Spider:    ['#6a4c93', '#432f60', '#9b7ec4', '#ffffff'],
         Owl:       ['#7fb069', '#54774a', '#adcf99', '#fff3c4'],
@@ -238,6 +282,113 @@ const SpriteFactory = {
 
     // Body shapes, reused across species with different colour ramps
     SHAPES: {
+        // --- redrawn at 32x32 -------------------------------------------
+        // Described as a shape and then lit from the depth of the body, so
+        // an ear rounds like an ear and a tail like a tail. See the ramp in
+        // monsterPalette() for what each character means.
+        slime: [
+            '................................',
+            '................................',
+            '................................',
+            '................................',
+            '................................',
+            '.............ooooo..............',
+            '..........ooo52255oo............',
+            '.........o5252222255o...........',
+            '........o52www2221255o..........',
+            '.......o52wwww11111155o.........',
+            '.......o52wwww111111155o........',
+            '......o52211111111113155o.......',
+            '......o221111111111333355o......',
+            '......o522111111113333355o......',
+            '.....o52211111111133333155o.....',
+            '....o5221111111113333333355o....',
+            '....o5221111111133333333355o....',
+            '...o5221111WWe16633WWe333355o...',
+            '...o2211111eee66666eee333325o...',
+            '...o2211111eee66666eee333325o...',
+            '...o2211111eee66666eee333325o...',
+            '...o521111366666666666333325o...',
+            '...o511113666e6666e666666322o...',
+            '....o511136666eeee666666322o....',
+            '....o5513666666666666666322o....',
+            '.....o55333333333333333322o.....',
+            '......o552222222222222222o......',
+            '.......o5555555555555552o.......',
+            '........oooooooooooooooo........',
+            '................................',
+            '................................',
+            '................................'
+        ],
+        oozer: [
+            '................................',
+            '................................',
+            '................................',
+            '................................',
+            '..........oo....................',
+            '.........o55o.......ooo.........',
+            '........o5255o.....o555o........',
+            '.......o522155oo..o52255o.......',
+            '.......o22111155oo522155o.......',
+            '.......o52211122252211155o......',
+            '......o5221www112221113155o.....',
+            '.....o5221wwww1112111133155o....',
+            '....o52211wwww11111111333155o...',
+            '....o522111113111111133333355o..',
+            '...o5221111113111111133333325o..',
+            '...o2211111111111111333333325o..',
+            '...o2211555555111155555533325o..',
+            '...o52211WWee111111WWee333325o..',
+            '..o522111eeee133313eeee333325o..',
+            '..o522111eeee666666eeee333355o..',
+            '.o5221111116666666666333333155o.',
+            'o522111116666666666666633333155o',
+            '522111336666e666666e666666333355',
+            '2211363366666eeeeee6666666663325',
+            '52136633666666666666666666666325',
+            '55533333666666666666666663333222',
+            'o555225333333333333333333222222o',
+            '.oo55555222222222222222222552oo.',
+            '...oooo555555555555555552oooo...',
+            '.......oooooooooooooooooo.......',
+            '................................',
+            '................................'
+        ],
+        vulpine: [
+            '................................',
+            '................................',
+            '................................',
+            '........oo...........oo.........',
+            '.......o55oo.......oo55o........',
+            '.......o5Aa5ooooooo5aa2o........',
+            '........o2awww22225aa2o.........',
+            '........o2awww2222aaa5o.........',
+            '........o2a122222223a5o.........',
+            '........o2211111113325o.........',
+            '........o22WWe1113WWe5o..oo.....',
+            '........o22eee1133eee5o.o55oo...',
+            '........o22eee1133eee5oo52255o..',
+            '........o5211113333325o52aAaao..',
+            '.......o55511AAeeB632252aABBa5o.',
+            '.......o55511BBeeB322551ABBBa5o.',
+            '........ooo21AABBB22ooo2AAABB55o',
+            '..........o5221A3355o.o52aAB325o',
+            '.........o52211133355o522113325o',
+            '.........o5221AAB3355o525133325o',
+            '........o5221AAABB3112251133325o',
+            '........o2211AAAAB3312251366322o',
+            '........o2211AAABB333251166322o.',
+            '........o22111ABB6333151666322o.',
+            '........o22111366666351666322o..',
+            '........o22113666666656666322o..',
+            '........o5213666666665663322o...',
+            '........o213353333533333222o....',
+            '........o55225222252222222o.....',
+            '........o555555555555552oo......',
+            '.........ooooooooooooooo........',
+            '................................'
+        ],
+
         blob: [
             '................',
             '................',
@@ -493,10 +644,10 @@ const SpriteFactory = {
     },
 
     SPECIES_SHAPE: {
-        Slime: 'blob',      Oozer: 'blob',
+        Slime: 'slime',     Oozer: 'oozer',
         Rat: 'quadruped',   Rattler: 'quadruped',
         Bird: 'winged',     Stormwing: 'winged',
-        Fox: 'quadruped',   Pyrefox: 'quadruped',
+        Fox: 'vulpine',     Pyrefox: 'quadruped',
         Spider: 'arachnid',   Owl: 'winged',
         Fish: 'finned',     Crab: 'crustacean',   Turtle: 'shelled',
         Bat: 'winged',      Snake: 'serpent',     Golem: 'boulder',
@@ -623,25 +774,20 @@ const SpriteFactory = {
     },
 
     buildMonsters(scene) {
-        const scale = this.SCALE;
-        const size = this.CELL * scale;
-
         DEX_ORDER.forEach((name) => {
             const key = `monster-${name}`;
             if (scene.textures.exists(key)) return;
 
             const colors = this.MONSTER_COLORS[name] || ['#888888', '#555555', '#bbbbbb', '#ffffff'];
-            const palette = {
-                ...this.PALETTE,
-                '1': colors[0],
-                '2': colors[1],
-                '3': colors[2],
-                '4': colors[3]
-            };
-
             const shape = this.SHAPES[this.SPECIES_SHAPE[name] || 'blob'];
+
+            // Grids are being redrawn at 32x32 a species at a time, so the
+            // canvas is sized from the grid rather than from one constant.
+            const cells = shape.length;
+            const size = cells * this.SCALE;
+
             const texture = scene.textures.createCanvas(key, size, size);
-            this.paint(texture.getContext(), shape, 0, 0, palette, scale);
+            this.paint(texture.getContext(), shape, 0, 0, this.monsterPalette(colors), this.SCALE);
             texture.refresh();
         });
     },

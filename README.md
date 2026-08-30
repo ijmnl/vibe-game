@@ -263,7 +263,16 @@ chunky and crisp instead of blurry:
 
 Monsters share a handful of body shapes (blob, quadruped, winged, serpent,
 arachnid, shelled, moth, prowler, ...) recoloured per species, so adding a
-monster means adding a colour ramp and picking a shape. Characters get a soft
+monster means adding a colour ramp and picking a shape.
+
+Slime, Oozer and Fox have been redrawn at 32x32 with a proper tone ramp - an
+outline, five body tones, a specular highlight, pale markings and an eye with
+a catchlight. Those grids are generated rather than typed: `tools/art.py`
+describes a creature as a union of ellipses and polygons, measures how deep
+each pixel sits inside the body, and lights it off that, so an ear rounds like
+an ear and a species and its evolution come out lit identically. The painter
+sizes each texture from its own grid, so the remaining species keep working on
+the older 16x16 art until they are redrawn too. Characters get a soft
 ellipse baked in behind them with `destination-over`, so every person in the
 world casts a shadow without a single extra game object.
 
