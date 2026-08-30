@@ -11,39 +11,72 @@ class BattleSystem {
         this.timerScene = scene;
 
         this.player = null;
-        this.wildMonster = null;
+        this.opponent = null;
         this.isBattleActive = false;
         this.turn = 'player';
         this.battleLog = [];
         this.busy = false;
     }
 
+    // The monster the opponent has out. A wild battle is simply a trainer
+    // battle against a nameless team of one.
+    get wildMonster() {
+        return this.opponent ? this.opponent.team[this.opponent.index] : null;
+    }
+
+    get isTrainerBattle() {
+        return !!this.opponent && !this.opponent.isWild;
+    }
+
     startBattle(player, wildMonster, timerScene = this.scene) {
+        this.begin(player, { isWild: true, team: [wildMonster], index: 0 }, timerScene);
+    }
+
+    // trainer: { id, title, team: [Monster], reward, defeat: [lines] }
+    startTrainerBattle(player, trainer, timerScene = this.scene) {
+        this.begin(player, {
+            isWild: false,
+            id: trainer.id,
+            title: trainer.title,
+            team: trainer.team,
+            index: 0,
+            reward: trainer.reward || 0,
+            defeatLines: trainer.defeat || []
+        }, timerScene);
+    }
+
+    begin(player, opponent, timerScene) {
         this.timerScene = timerScene;
         this.player = player;
-        this.wildMonster = wildMonster;
+        this.opponent = opponent;
         this.isBattleActive = true;
         this.battleLog = [];
         this.busy = false;
 
-        player.recordSeen(wildMonster.name);
+        opponent.team.forEach(monster => monster.resetBattleState());
+        if (opponent.isWild) player.recordSeen(this.wildMonster.name);
 
         // Lead with someone who can actually fight
         const healthy = player.getFirstHealthyIndex();
         if (healthy >= 0) player.currentMonsterIndex = healthy;
 
         player.getCurrentMonster()?.resetBattleState();
-        wildMonster.resetBattleState();
 
         // Show the panel first: it clears the log box, which would otherwise
-        // wipe this opening line.
+        // wipe these opening lines.
         this.scene.events.emit('battle-start', {
             player,
-            wildMonster,
+            wildMonster: this.wildMonster,
             turn: 'player'
         });
 
-        this.addToLog(`A wild ${wildMonster.name} (Lv.${wildMonster.level}) appeared!`);
+        if (opponent.isWild) {
+            this.addToLog(`A wild ${this.wildMonster.name} (Lv.${this.wildMonster.level}) appeared!`);
+        } else {
+            this.addToLog(`${opponent.title} wants to battle!`);
+            this.addToLog(`${opponent.title} sent out ${this.wildMonster.name}!`);
+        }
+
         this.setTurn('player');
     }
 
@@ -263,6 +296,12 @@ class BattleSystem {
     // --- catching -----------------------------------------------------------
 
     async tryCatch(ballName) {
+        if (this.isTrainerBattle) {
+            this.addToLog("You can't catch someone else's monster!");
+            await this.wait(700);
+            return false;
+        }
+
         const inventory = this.player.getInventory();
         const ball = ballName || this.bestAvailableBall();
 
@@ -325,6 +364,12 @@ class BattleSystem {
     // --- other actions ------------------------------------------------------
 
     async tryRun() {
+        if (this.isTrainerBattle) {
+            this.addToLog("There's no running from a trainer battle!");
+            await this.wait(700);
+            return true;
+        }
+
         if (this.wildMonster.legendary) {
             this.addToLog("You can't escape from this one!");
             await this.wait(700);
@@ -429,9 +474,24 @@ class BattleSystem {
         if (!this.isBattleActive) return true;
 
         if (!this.wildMonster.isAlive()) {
-            this.addToLog(`Wild ${this.wildMonster.name} fainted!`);
+            const fallen = this.wildMonster;
+            this.addToLog(this.isTrainerBattle
+                ? `${this.opponent.title}'s ${fallen.name} fainted!`
+                : `Wild ${fallen.name} fainted!`);
             await this.wait(600);
-            await this.awardSpoils();
+
+            await this.awardSpoils(fallen);
+
+            // A trainer keeps going while they still have monsters
+            const next = this.opponent.team.findIndex(m => m.isAlive());
+            if (this.isTrainerBattle && next >= 0) {
+                this.opponent.index = next;
+                this.addToLog(`${this.opponent.title} sent out ${this.wildMonster.name}!`);
+                this.scene.events.emit('battle-opponent-switch', {});
+                await this.wait(700);
+                return false;
+            }
+
             this.endBattle('win');
             return true;
         }
@@ -461,17 +521,21 @@ class BattleSystem {
         return false;
     }
 
-    async awardSpoils() {
+    async awardSpoils(defeated) {
         const monster = this.player.getCurrentMonster();
-        const wild = this.wildMonster;
+        const wild = defeated || this.wildMonster;
 
-        const coins = CONFIG.COINS_PER_WIN_BASE + wild.level * CONFIG.COINS_PER_WIN_PER_LEVEL;
-        this.player.addCoins(coins);
-        this.addToLog(`You found ${coins} coins!`);
+        // Wild monsters drop coins themselves; a trainer pays once, at the end
+        if (this.opponent.isWild) {
+            const coins = CONFIG.COINS_PER_WIN_BASE + wild.level * CONFIG.COINS_PER_WIN_PER_LEVEL;
+            this.player.addCoins(coins);
+            this.addToLog(`You found ${coins} coins!`);
+        }
 
         if (!monster || !monster.isAlive()) return;
 
-        const gained = Math.floor(getSpecies(wild.name).exp * wild.level / 4) + 5;
+        const trainerBonus = this.opponent.isWild ? 1 : 1.5;
+        const gained = Math.floor(getSpecies(wild.name).exp * wild.level * trainerBonus / 4) + 5;
         this.addToLog(`${monster.name} gained ${gained} EXP.`);
 
         const events = monster.gainExp(gained);
@@ -498,9 +562,20 @@ class BattleSystem {
         this.isBattleActive = false;
         this.player.getAllMonsters().forEach(monster => monster.resetBattleState());
 
-        this.scene.events.emit('battle-end', { result, player: this.player });
+        const opponent = this.opponent;
 
-        this.wildMonster = null;
+        if (result === 'win' && this.isTrainerBattle && opponent.reward) {
+            this.player.addCoins(opponent.reward);
+            this.addToLog(`${opponent.title} handed over ${opponent.reward} coins!`);
+        }
+
+        this.scene.events.emit('battle-end', {
+            result,
+            player: this.player,
+            opponent
+        });
+
+        this.opponent = null;
         this.player = null;
         this.turn = 'player';
     }

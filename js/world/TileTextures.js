@@ -12,39 +12,55 @@ const TileTextures = {
     // Order defines the tile index: index = TYPES.indexOf(type) * VARIANTS + variant
     TYPES: [
         'grass',
-        'grass_flower',
-        'forest',
-        'forest_tree',
-        'water',
-        'water_edge',
-        'cave',
-        'cave_rock',
-        'sand',
-        'sand_rock',
+        'tall_grass',
         'path',
-        'village_floor',
-        'village_wall',
-        'village_heal',
-        'village_shop',
+        'forest_floor',
+        'tree',
+        'shore',
+        'water',
+        'cave_floor',
+        'cave_path',
+        'cave_wall',
+        'rock',
+        'sand',
+        'sand_patch',
+        'cliff',
+        'town_grass',
+        'town_path',
+        'flowers',
+        'building',
+        'building_front',
+        'fence',
+        'heal_pad',
+        'shop_pad',
+        'exit',
         'lair'
     ],
 
     BASE_COLORS: {
-        grass: 0x2e8b57,
-        grass_flower: 0x2e8b57,
-        forest: 0x228b22,
-        forest_tree: 0x1a6b1a,
-        water: 0x1e90ff,
-        water_edge: 0x4aa3ff,
-        cave: 0x696969,
-        cave_rock: 0x5a5a5a,
-        sand: 0xf4a460,
-        sand_rock: 0xe0915a,
-        path: 0x8b4513,
-        village_floor: 0xc9b79a,
-        village_wall: 0x8a6a4a,
-        village_heal: 0xc9b79a,
-        village_shop: 0xc9b79a,
+        grass: 0x4a9e52,
+        tall_grass: 0x2f7a3a,
+        path: 0xc2a878,
+        forest_floor: 0x3d7a44,
+        tree: 0x2a5c32,
+        shore: 0x9fc6a8,
+        water: 0x3a7fd0,
+        cave_floor: 0x4f4a5e,
+        cave_path: 0x968ea2,
+        cave_wall: 0x453f52,
+        rock: 0x7a7280,
+        sand: 0xe8cb96,
+        sand_patch: 0xb08a4e,
+        cliff: 0x9a7a4a,
+        town_grass: 0x5aa85e,
+        town_path: 0xc9b79a,
+        flowers: 0x5aa85e,
+        building: 0xb85c4a,
+        building_front: 0x8a6a52,
+        fence: 0x8a6a4a,
+        heal_pad: 0xc9b79a,
+        shop_pad: 0xc9b79a,
+        exit: 0xd8c9a8,
         lair: 0x4a3550
     },
 
@@ -53,8 +69,8 @@ const TileTextures = {
         const typeIndex = this.TYPES.indexOf(tile.type);
         if (typeIndex === -1) return -1;
 
-        const variant = tile.variant % WorldGenerator.TILE_VARIANTS;
-        return typeIndex * WorldGenerator.TILE_VARIANTS + variant;
+        const variant = tile.variant % WorldMap.TILE_VARIANTS;
+        return typeIndex * WorldMap.TILE_VARIANTS + variant;
     },
 
     // Create (once per game) the canvas texture holding every tile variant
@@ -64,7 +80,7 @@ const TileTextures = {
         }
 
         const size = CONFIG.TILE_SIZE;
-        const variants = WorldGenerator.TILE_VARIANTS;
+        const variants = WorldMap.TILE_VARIANTS;
         const texture = scene.textures.createCanvas(
             this.TEXTURE_KEY,
             size * variants,
@@ -85,46 +101,154 @@ const TileTextures = {
     drawTile(ctx, type, variant, x, y, size) {
         // Spread the variants evenly around the base colour so neighbouring
         // tiles read as texture rather than as flat blocks.
-        const shade = (variant - (WorldGenerator.TILE_VARIANTS - 1) / 2) * 12;
+        const shade = (variant - (WorldMap.TILE_VARIANTS - 1) / 2) * 10;
 
         ctx.fillStyle = this.shiftColor(this.BASE_COLORS[type], shade);
         ctx.fillRect(x, y, size, size);
 
         switch (type) {
-            case 'grass_flower':
+            case 'tall_grass':
+                this.drawBlades(ctx, x, y, size, variant);
+                break;
+            case 'flowers':
                 this.drawFlower(ctx, x, y, size, variant);
                 break;
-            case 'forest_tree':
+            case 'tree':
                 this.drawTree(ctx, x, y, size);
                 break;
-            case 'cave_rock':
-            case 'sand_rock':
-                this.drawRock(ctx, x, y, size, type === 'cave_rock' ? '#4a4a4a' : '#8b4513');
+            case 'rock':
+            case 'cliff':
+                this.drawRock(ctx, x, y, size, type === 'rock' ? '#5f5866' : '#7a5f38');
+                break;
+            case 'cave_wall':
+                this.drawCaveWall(ctx, x, y, size);
                 break;
             case 'water':
-            case 'water_edge':
+            case 'shore':
                 this.drawRipples(ctx, x, y, size, variant);
                 break;
             case 'path':
+            case 'cave_path':
+            case 'sand':
                 this.drawGravel(ctx, x, y, size, variant);
                 break;
-            case 'village_floor':
+            case 'cave_floor':
+                this.drawRubble(ctx, x, y, size, variant);
+                break;
+            case 'sand_patch':
+                this.drawScrub(ctx, x, y, size, variant);
+                break;
+            case 'town_path':
                 this.drawPaving(ctx, x, y, size);
                 break;
-            case 'village_wall':
+            case 'fence':
                 this.drawFence(ctx, x, y, size);
                 break;
-            case 'village_heal':
+            case 'building':
+                this.drawWall(ctx, x, y, size);
+                break;
+            case 'building_front':
+                this.drawShopFront(ctx, x, y, size);
+                break;
+            case 'heal_pad':
                 this.drawPaving(ctx, x, y, size);
                 this.drawPad(ctx, x, y, size, '#ff5a7a', 'cross');
                 break;
-            case 'village_shop':
+            case 'shop_pad':
                 this.drawPaving(ctx, x, y, size);
                 this.drawPad(ctx, x, y, size, '#f6d02c', 'coin');
+                break;
+            case 'exit':
+                this.drawExit(ctx, x, y, size);
                 break;
             case 'lair':
                 this.drawLair(ctx, x, y, size);
                 break;
+        }
+    },
+
+    // Tufts marking ground that hides monsters
+    drawBlades(ctx, x, y, size, variant) {
+        ctx.fillStyle = 'rgba(20, 60, 25, 0.55)';
+
+        for (let i = 0; i < 5; i++) {
+            const bx = x + ((i * 7 + variant * 3) % (size - 3));
+            const by = y + ((i * 5 + variant * 2) % (size - 6));
+            ctx.fillRect(bx, by + 3, 2, 5);
+            ctx.fillRect(bx + 2, by, 2, 8);
+        }
+    },
+
+    // Loose stones: marks cave ground where monsters lurk
+    drawRubble(ctx, x, y, size, variant) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
+
+        for (let i = 0; i < 5; i++) {
+            const rx = x + ((i * 9 + variant * 4) % (size - 5));
+            const ry = y + ((i * 6 + variant * 5) % (size - 5));
+            ctx.fillRect(rx, ry, 4, 3);
+        }
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.10)';
+        ctx.fillRect(x + 2, y + size - 5, size - 4, 2);
+    },
+
+    // Dry scrub: the desert equivalent of tall grass
+    drawScrub(ctx, x, y, size, variant) {
+        ctx.fillStyle = 'rgba(70, 50, 20, 0.5)';
+
+        for (let i = 0; i < 4; i++) {
+            const sx = x + ((i * 8 + variant * 3) % (size - 4));
+            const sy = y + ((i * 7 + variant * 2) % (size - 8));
+            ctx.fillRect(sx, sy + 4, 2, 5);
+            ctx.fillRect(sx + 2, sy + 1, 2, 8);
+        }
+    },
+
+    drawCaveWall(ctx, x, y, size) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.fillRect(x, y, size, size * 0.25);
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+        ctx.fillRect(x + size * 0.15, y + size * 0.45, size * 0.3, size * 0.12);
+        ctx.fillRect(x + size * 0.55, y + size * 0.7, size * 0.28, size * 0.1);
+    },
+
+    drawWall(ctx, x, y, size) {
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
+        ctx.lineWidth = 1;
+
+        for (let row = 0; row < 3; row++) {
+            const yy = y + (row + 1) * size / 3;
+            ctx.beginPath();
+            ctx.moveTo(x, yy - 0.5);
+            ctx.lineTo(x + size, yy - 0.5);
+            ctx.stroke();
+        }
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+        ctx.fillRect(x, y, size, 2);
+    },
+
+    // The ground floor of a building, with a door
+    drawShopFront(ctx, x, y, size) {
+        ctx.fillStyle = '#5a4436';
+        ctx.fillRect(x + size * 0.3, y + size * 0.25, size * 0.4, size * 0.75);
+
+        ctx.fillStyle = '#f6d02c';
+        ctx.fillRect(x + size * 0.6, y + size * 0.55, size * 0.06, size * 0.06);
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.fillRect(x, y, size, size * 0.12);
+    },
+
+    drawExit(ctx, x, y, size) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+        ctx.fillRect(x, y, size, size);
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        for (let i = 0; i < 3; i++) {
+            ctx.fillRect(x + size * 0.2, y + size * (0.2 + i * 0.25), size * 0.6, 2);
         }
     },
 
@@ -178,7 +302,7 @@ const TileTextures = {
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
         ctx.lineWidth = Math.max(1, size * 0.05);
 
-        const offset = (variant / WorldGenerator.TILE_VARIANTS) * size;
+        const offset = (variant / WorldMap.TILE_VARIANTS) * size;
 
         ctx.beginPath();
         ctx.moveTo(x, y + (offset + size * 0.3) % size);

@@ -174,3 +174,88 @@ controles hierboven die de doodlopende gevechten vonden.
 
 Spelregels gebruiken bewust geen `Phaser.Math` meer (zie
 `js/utils/MathUtils.js`), zodat ze te testen zijn zonder draaiend spel.
+
+
+---
+
+# 🗺️ Derde ronde: een regio, NPC's en balans
+
+Feedback na het spelen: het laatste beest leek "gecached", er waren geen NPC's,
+de wereld was één grote lap, en de eerste gevechten waren te zwaar.
+
+## 1. De cachebug — bevestigd en opgelost
+
+Gereproduceerd met een team van drie. Na wisselen naar de Fox en het gevecht
+verlaten, toonde het volgende gevecht:
+
+```
+paneel: "Slime"        sprite op het scherm: monster-Fox
+```
+
+Het paneel klopte, de **sprite niet**. `createMonsterViews()` draaide vóór
+`startBattle()`, en pas `startBattle()` bepaalt wie er vooraan staat. De sprite
+werd dus uit de oude index getekend. De volgorde is omgedraaid en het maken van
+de sprites is idempotent gemaakt.
+
+## 2. Eén grote kaart → een regio van negen kaarten
+
+De wereld van 100x100 is vervangen door negen kleine kaarten, verbonden met
+uitgangen: drie dorpen en zes routes. Elke kaart komt uit een vaste seed, dus
+een route ziet er hetzelfde uit als je terugloopt — met `Math.random()` zou de
+wereld achter je rug herschikken.
+
+Ook nieuw: **wilde monsters zitten alleen in het hoge gras** (of puin in de
+grot, struiken in de woestijn). Blijf je op het pad, dan gebeurt er niets. Dat
+geeft je zelf de keuze wanneer je vecht.
+
+## 3. NPC's en trainers
+
+24 NPC's verdeeld over de regio, waarvan 9 trainers met een compleet team. Een
+verslagen trainer blijft verslagen (opgeslagen). Trainers geven meer EXP en
+munten dan wilde monsters, je kunt hun monsters niet vangen en niet vluchten.
+
+Praten gaat met de nieuwe **A-knop** (of spatie/enter): ga voor iemand staan en
+druk.
+
+## 4. Balans
+
+Gemeten in plaats van gegokt, met gesimuleerde gevechten (300 per combinatie):
+
+| | Voor | Na |
+|---|------|-----|
+| Startteam | Slime L5, Rat L4 | Slime L6, Rat L6 |
+| Route 1 monsters | overal level 1-5, oplopend met afstand | vaste band per route: 3-5 |
+| Winkans op Route 1 | wisselend, soms hopeloos | **96-100%**, 3-8 beurten, ~45% HP over |
+| Startmunten | 50 | 120 |
+
+**Een muur die het testen blootlegde**: op het niveau waarmee je Whisper Wood
+binnenkomt, verloor een Slime **100%** van de gevechten tegen Spider, Owl en
+Snake — allemaal Grass, en Grass doet dubbele schade op Water. Een Rat haalde
+2-40%. Het antwoord was een Fire-monster, en dat woont *in* het bos dat je niet
+overleeft.
+
+De wijze man in Greenwood zei al "neem iets dat vuur spuwt". Dat is nu letterlijk
+gemaakt: hij **geeft** je een Fox (Lv.8), één keer, opgeslagen. Daarmee ga je van
+0% naar 100% in het bos. Verder is een niet-Grass monster aan het bos toegevoegd
+en leren de starters hun echte aanvallen eerder (Rat op 11 in plaats van 15).
+
+## 5. Wat het testen verder ophaalde
+
+- **Still Shore en Ember Cave waren volledig gevaarterrein** (463 en 414 tegels)
+  omdat de basisgrond zelf een encounter-tegel was. Je werd non-stop aangevallen.
+  Nu 71-135 tegels aan duidelijke plekken, met veilige paden ertussen.
+- **De grot zag eruit als een lege kamer.** Meer wanden en duidelijker contrast
+  tussen veilig pad en puin, anders is "blijf op het pad" niet te gebruiken.
+
+## Tests
+
+Van 37 naar **38 tests, 0 gefaald**. Nieuw en bewust ontwerpgericht:
+
+- **elke uitgang is bereikbaar vanaf het startpunt**, via flood fill — anders
+  kan procedurele rommel een route dichtmetselen en zit je vast
+- kaartgeneratie is deterministisch (route verandert niet achter je rug)
+- elke uitgang heeft een uitgang terug, aan de juiste kant
+- dorpen bevatten geen gevaarterrein en hebben altijd een verpleegster en winkel
+- trainerteams gebruiken bestaande soorten binnen de levelband van hun route
+
+Prestaties onveranderd: **60-61 fps** op iPhone 13, Pixel 5 en Galaxy S9+.

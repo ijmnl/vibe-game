@@ -11,6 +11,7 @@ class TouchControls {
         this.root = null;
         this.pointerDirections = new Map();
         this.onMenu = null;
+        this.onInteract = null;
     }
 
     // Wire up the markup in index.html. Safe to call before the game boots.
@@ -22,19 +23,24 @@ class TouchControls {
             this.bindDirectionButton(button, button.dataset.direction);
         });
 
-        const menuButton = this.root.querySelector('[data-action="menu"]');
-        if (menuButton) {
-            menuButton.addEventListener('click', (event) => {
-                event.preventDefault();
-                if (this.onMenu) this.onMenu();
-            });
-        }
+        this.bindAction('menu', () => this.onMenu && this.onMenu());
+        this.bindAction('interact', () => this.onInteract && this.onInteract());
 
         this.setVisible(TouchControls.isTouchDevice());
 
         // A phone plugged into a keyboard, or a laptop with a touchscreen, can
         // switch between the two - show the pad as soon as a finger appears.
         window.addEventListener('touchstart', () => this.setVisible(true), { once: true });
+    }
+
+    bindAction(action, handler) {
+        const button = this.root.querySelector(`[data-action="${action}"]`);
+        if (!button) return;
+
+        button.addEventListener('click', (event) => {
+            event.preventDefault();
+            handler();
+        });
     }
 
     bindDirectionButton(button, direction) {

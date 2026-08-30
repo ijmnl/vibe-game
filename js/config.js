@@ -32,19 +32,13 @@ const CONFIG = {
 
     // Levelling
     MAX_LEVEL: 50,
-    EXP_BASE: 20,
-    EXP_PER_LEVEL: 9,
-
-    // Wild levels scale with distance from the starting village, so heading
-    // outwards is what makes the world get harder.
-    WILD_LEVEL_MIN: 2,
-    // Levels ramp gently near home and steepen further out, so the starting
-    // area stays fair while the map edges are a real challenge.
-    WILD_LEVEL_CURVE: 1.35,
-    WILD_LEVEL_DIVISOR: 8,
+    // Early levels come quickly so a fresh team keeps pace with Route 1,
+    // then the curve stretches out.
+    EXP_BASE: 14,
+    EXP_PER_LEVEL: 8,
 
     // Economy
-    STARTING_COINS: 50,
+    STARTING_COINS: 120,
     COINS_PER_WIN_BASE: 8,
     COINS_PER_WIN_PER_LEVEL: 3,
     
@@ -52,7 +46,7 @@ const CONFIG = {
     // Zones
     ZONES: {
         GRASS: { name: 'Grassland', color: 0x2e8b57, encounterRate: 0.02, monsters: ['Slime', 'Rat', 'Bird'] },
-        FOREST: { name: 'Forest', color: 0x228b22, encounterRate: 0.03, monsters: ['Fox', 'Spider', 'Owl', 'Snake'] },
+        FOREST: { name: 'Forest', color: 0x228b22, encounterRate: 0.03, monsters: ['Fox', 'Spider', 'Owl', 'Bird'] },
         WATER: { name: 'Lake', color: 0x1e90ff, encounterRate: 0.025, monsters: ['Fish', 'Crab', 'Turtle'] },
         CAVE: { name: 'Cave', color: 0x696969, encounterRate: 0.015, monsters: ['Bat', 'Snake', 'Golem'] },
         SAND: { name: 'Desert', color: 0xf4a460, encounterRate: 0.01, monsters: ['Scorpion', 'Vulture', 'Camel'] },
@@ -102,18 +96,4 @@ function getRandomMonsterForZone(zoneType) {
     return monsters[randomIndex];
 }
 
-// Wild level for a spot, scaling with how far it is from the starting village
-function getWildLevelAt(tileX, tileY) {
-    const homeX = Math.floor(CONFIG.WORLD_WIDTH / 2);
-    const homeY = Math.floor(CONFIG.WORLD_HEIGHT / 2);
-    const distance = Math.hypot(tileX - homeX, tileY - homeY);
 
-    const base = CONFIG.WILD_LEVEL_MIN
-        + Math.pow(distance / CONFIG.WILD_LEVEL_DIVISOR, CONFIG.WILD_LEVEL_CURVE);
-
-    // Spread widens with distance so the starting area is predictable
-    const spread = 1 + Math.floor(distance / 25);
-    const roll = randomInt(-spread, spread);
-
-    return clamp(Math.round(base + roll), 2, CONFIG.MAX_LEVEL);
-}

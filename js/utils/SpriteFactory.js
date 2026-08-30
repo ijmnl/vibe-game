@@ -434,6 +434,7 @@ const SpriteFactory = {
         if (scene.textures.exists('player')) return;
 
         this.buildPlayer(scene);
+        this.buildNpcs(scene);
         this.buildMonsters(scene);
         this.buildIcons(scene);
     },
@@ -491,6 +492,31 @@ const SpriteFactory = {
                 texture.add(index++, 0, column * size, row * size, size, size);
             }
         }
+    },
+
+    // Standing NPC portraits, one frame each, facing the camera
+    NPC_GRIDS: {
+        'npc-nurse': { swap: { c: '#f3f3f8', C: '#d8d8e4', j: '#ff8fa8', J: '#e06a86', h: '#b8506c' } },
+        'npc-clerk': { swap: { c: '#4fc3f7', C: '#2b8fc4', j: '#3a4a68', J: '#2a3550', h: '#3a2a1a' } },
+        'npc-elder': { swap: { c: '#cfcfd6', C: '#a8a8b4', j: '#6a5f4a', J: '#4d4536', h: '#dcdce4' } },
+        'npc-kid':   { swap: { c: '#7fe08a', C: '#4faa5c', j: '#e0a84a', J: '#b8813a', h: '#6b3f1d' } },
+        'npc-trainer': { swap: { c: '#2a2f38', C: '#1a1e24', j: '#d64a3a', J: '#a3352a', h: '#2a1a10' } }
+    },
+
+    buildNpcs(scene) {
+        // NPCs reuse the player's front-facing frame with a recoloured palette,
+        // so the whole cast stays visually consistent for very little code.
+        const scale = this.SCALE;
+        const size = this.CELL * scale;
+        const grid = this.PLAYER_FRAMES.down[0];
+
+        Object.entries(this.NPC_GRIDS).forEach(([key, { swap }]) => {
+            if (scene.textures.exists(key)) return;
+
+            const texture = scene.textures.createCanvas(key, size, size);
+            this.paint(texture.getContext(), grid, 0, 0, { ...this.PALETTE, ...swap }, scale);
+            texture.refresh();
+        });
     },
 
     buildMonsters(scene) {

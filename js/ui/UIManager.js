@@ -40,6 +40,12 @@ class UIManager {
         this.dexList = document.getElementById('dex-list');
         this.coinCounters = document.querySelectorAll('.coin-count');
 
+        this.dialogueUI = document.getElementById('dialogue-ui');
+        this.dialogueSpeaker = document.getElementById('dialogue-speaker');
+        this.dialogueText = document.getElementById('dialogue-text');
+        this.dialogueQueue = [];
+        this.dialogueDone = null;
+
         this.setupEventListeners();
     }
 
@@ -67,6 +73,11 @@ class UIManager {
         on('mute-btn', () => this.toggleMute());
 
         touchControls.onMenu = () => this.toggleMenu();
+
+        // Tapping anywhere on the dialogue box advances it
+        if (this.dialogueUI) {
+            this.dialogueUI.addEventListener('click', () => this.advanceDialogue());
+        }
 
         const events = this.scene.events;
         events.on('battle-start', (data) => this.showBattleUI(data));
@@ -110,10 +121,7 @@ class UIManager {
 
         if (positionEl) positionEl.textContent = `X:${tileX} Y:${tileY}`;
 
-        if (zoneEl) {
-            const zone = this.scene.worldGenerator.getTileAt(tileX, tileY)?.zone || 'GRASS';
-            zoneEl.textContent = CONFIG.ZONES[zone]?.name || zone;
-        }
+        if (zoneEl) zoneEl.textContent = this.scene.map.name;
     }
 
     // --- battle UI ----------------------------------------------------------
@@ -132,6 +140,8 @@ class UIManager {
     }
 
     setWorldHudVisible(visible) {
+        if (visible && (this.isDialogueOpen() || this.isOverlayOpen())) return;
+
         [
             document.getElementById('minimap-container'),
             document.getElementById('player-stats'),
@@ -416,7 +426,7 @@ class UIManager {
 
         // Keep the shop tile marked as handled, otherwise the next frame sees
         // the player still standing on it and immediately reopens the shop.
-        this.scene.currentTileType = 'village_shop';
+        this.scene.lastTileType = 'shop_pad';
         saveGame();
     }
 
@@ -510,6 +520,57 @@ class UIManager {
         gameState.dexCelebrated = true;
         this.showMessage('You caught every monster! The Monsterdex is complete!', 6000);
         audioManager.playSfx('victory');
+    }
+
+    // --- dialogue -----------------------------------------------------------
+
+    isDialogueOpen() {
+        return this.dialogueUI && !this.dialogueUI.classList.contains('hidden');
+    }
+
+    // True while any full-screen panel is up, so the world ignores input
+    isOverlayOpen() {
+        return [this.menuUI, this.shopUI, this.dexUI, this.battleUI]
+            .some(panel => panel && !panel.classList.contains('hidden'));
+    }
+
+    showDialogue(speaker, lines, onDone = null) {
+        this.dialogueQueue = [...(lines || [])];
+        this.dialogueDone = onDone;
+
+        this.dialogueSpeaker.textContent = speaker || '';
+        this.dialogueSpeaker.classList.toggle('hidden', !speaker);
+
+        this.dialogueUI.classList.remove('hidden');
+        this.setWorldHudVisible(false);
+        this.advanceDialogue(true);
+    }
+
+    // Show a conversation once the battle panel has closed
+    queueDialogue(speaker, lines) {
+        if (!lines || !lines.length) return;
+
+        setTimeout(() => this.showDialogue(speaker, lines), 400);
+    }
+
+    advanceDialogue(first = false) {
+        if (!this.isDialogueOpen() && !first) return;
+
+        if (this.dialogueQueue.length === 0) {
+            this.closeDialogue();
+            return;
+        }
+
+        this.dialogueText.textContent = this.dialogueQueue.shift();
+    }
+
+    closeDialogue() {
+        this.dialogueUI.classList.add('hidden');
+        this.setWorldHudVisible(true);
+
+        const done = this.dialogueDone;
+        this.dialogueDone = null;
+        if (done) done();
     }
 
     // --- misc ---------------------------------------------------------------

@@ -4,17 +4,37 @@ A Pokémon-inspired HTML5 game built with Phaser.js and modern JavaScript.
 
 ## 🎮 Game Features
 
+- **A region, not one big field**: nine connected maps - three towns and six
+  routes - joined by exits, the way a Pokémon region works. Each is generated
+  from a fixed seed, so a route looks the same every time you walk back in
+- **Townsfolk and trainers**: 24 NPCs to talk to, 9 of whom will battle you
+  with a full team. Beaten trainers stay beaten
 - **20 monsters to collect**, each with a fixed type, its own pixel art, its own
   learnset, and several with evolutions
 - **Turn-based battles with real choices**: pick from up to four moves, work the
   type chart, land criticals, inflict burn, poison, paralysis and sleep
-- **Open world**: a procedurally generated map of grassland, forest, lakes,
-  caves and desert, with wild levels rising the further you roam
-- **Villages** with a heal pad and a shop, so you can patch up and restock
+- **Encounters only in tall grass**, so the path is always the safe way through
+- **Villages** with a nurse who heals you free and a shopkeeper who restocks you
 - **Coins** from every win, spent on potions, antidotes and better balls
 - **Monsterdex** tracking what you have seen and caught - filling it is the goal
-- **A legendary** waiting in a lair in the far corner of the map
-- **Plays on a phone**: on-screen D-pad, portrait and landscape layouts
+- **A legendary** asleep at Ember Summit, at the far end of the region
+- **Plays on a phone**: on-screen D-pad, a talk button, portrait and landscape
+
+## 🗺️ The region
+
+```
+Sprout Town ──north──> Route 1 ──north──> Greenwood
+                                              │ east
+                                              v
+   Ember Cave <──north── Still Shore <──north── Lakeside <──west── Whisper Wood
+        │ east
+        v
+   Dust Road ──east──> Ember Summit
+```
+
+Levels climb along the chain: Route 1 sits at 3-5, Whisper Wood at 6-9, and
+Dust Road at 19-24. Talk to the sage in Greenwood before heading into the wood -
+he hands over something that makes the trip a great deal easier.
 
 ## 📱 Playing on your phone
 
@@ -46,29 +66,29 @@ Phaser is vendored in `vendor/`, so the game also runs offline and from a
 ## 🚀 How to Play
 
 1. **Move**: the on-screen D-pad on a phone, or arrow keys / WASD on a desktop
-2. **Find monsters**: walk through grass, forest, caves and desert. Villages are
-   safe - nothing attacks you there
-3. **Battle**:
+2. **Talk**: the **A** button, or Space / Enter. Face someone and press it -
+   NPCs give directions, hints, and occasionally a monster
+3. **Find monsters**: only the tall grass, rubble and scrub hide them. Stay on
+   the path if you would rather not fight
+4. **Battle**:
    - **Fight** - choose one of your monster's moves. Types matter: Water beats
      Fire and Rock, Grass beats Water and Rock, Fire beats Grass, Electric beats
      Water, Rock beats Fire and Electric. Normal is never resisted
    - **Throw Ball** - the weaker and more status-afflicted the target, the
-     better your odds
+     better your odds. You cannot catch a trainer's monster
    - **Bag** / **Team** - use an item, or switch monster
-   - **Run** - usually works, though not against everything
-4. **Level up**: monsters gain EXP, learn new moves, and some evolve
-5. **Villages**: step on the pink cross to heal your whole team for free, or the
-   gold coin to open the shop
-6. **Menu**: the MENU button, or ESC / M. Your team, your bag, the Monsterdex,
-   and a sound toggle
+   - **Run** - works on wild monsters. Trainers will not let you leave
+5. **Towns**: the nurse heals your whole team for free, the shopkeeper sells
+   potions and balls
+6. **Menu**: the MENU button, or ESC / M. Team, bag, Monsterdex, sound toggle
 
 ### Tips
 
 - Weaken a monster before throwing a ball; a full-health target rarely stays in
-- Levels rise with distance from your home village, so push outwards gradually
-- Losing costs you a quarter of your coins and sends you back to a village -
+- A type disadvantage is worth switching monster over, not powering through
+- Trainers give far more EXP and coins than wild monsters
+- Losing costs a fifth of your coins and sends you back to the last town -
   never your monsters or your progress
-- Something is waiting in the far south-east corner of the map
 
 ## 📁 Project Structure
 
@@ -80,34 +100,36 @@ pokemon-game/
 ├── css/
 │   └── style.css          # Game styles
 ├── js/
-│   ├── config.js          # Tuning: damage, levels, economy, zones, items
+│   ├── config.js          # Tuning: damage, levelling, economy, zones, items
 │   ├── main.js            # Game initialization and saving
 │   ├── data/
 │   │   ├── Types.js       # The six types and the effectiveness chart
 │   │   ├── Moves.js       # Move definitions and status effects
-│   │   └── Species.js     # Stats, types, learnsets, evolutions, dex numbers
+│   │   ├── Species.js     # Stats, types, learnsets, evolutions, dex numbers
+│   │   └── Maps.js        # The region: towns, routes, exits, NPCs, trainers
 │   ├── entities/
 │   │   ├── Player.js      # Player, team, coins, Monsterdex
 │   │   └── Monster.js     # Stats, moves, status, levelling, evolution
 │   ├── systems/
-│   │   ├── BattleSystem.js
+│   │   ├── BattleSystem.js   # Wild and trainer battles
 │   │   ├── EncounterSystem.js
 │   │   ├── Inventory.js
-│   │   └── AudioManager.js  # Procedural music and sound effects
+│   │   └── AudioManager.js   # Procedural music and sound effects
 │   ├── world/
-│   │   ├── WorldGenerator.js  # Terrain, villages, the legendary lair
-│   │   └── TileTextures.js    # Bakes the tileset the world layer draws from
+│   │   ├── WorldMap.js       # Builds one town or route from its definition
+│   │   └── TileTextures.js   # Bakes the tileset the world layer draws from
 │   ├── ui/
 │   │   ├── Minimap.js
-│   │   ├── TouchControls.js   # On-screen D-pad for phones
-│   │   └── UIManager.js       # HUD, battle panel, menu, shop, dex
+│   │   ├── TouchControls.js  # On-screen D-pad and A button
+│   │   └── UIManager.js      # HUD, battle panel, dialogue, menu, shop, dex
 │   ├── scenes/
 │   │   ├── BootScene.js
 │   │   ├── WorldScene.js
 │   │   └── BattleScene.js
 │   └── utils/
-│       ├── MathUtils.js       # clamp/random, so game rules need no Phaser
-│       ├── SpriteFactory.js   # Draws all pixel art into Phaser textures
+│       ├── MathUtils.js      # clamp/random, so game rules need no Phaser
+│       ├── Rng.js            # Seeded RNG, so maps regenerate identically
+│       ├── SpriteFactory.js  # Draws all pixel art into Phaser textures
 │       └── SpriteGenerator.js # Older sprite experiments, unused
 └── test/
     └── index.html          # Open in a browser to run the smoke tests
@@ -124,14 +146,20 @@ required - Phaser is vendored in `vendor/`.
 
 ### Tests
 Open `test/index.html` in a browser. It loads the game modules and runs smoke
-tests over the config, world generation, entities, battles and inventory. Some
-of them are design checks rather than code checks - for instance, that every
-species keeps at least two attacking moves and has a move that is not resisted
-by any type. Those two caught real problems: a Bird whose moves were all
-Electric, and a Turtle that lost its only neutral attack to the four-move cap.
+tests over the config, maps, entities, battles and inventory. Several are design
+checks rather than code checks, and they have each caught real problems:
+
+- every species keeps at least two attacking moves, and has something that is
+  not resisted by any type - this found a Bird whose whole moveset was
+  Electric, and a Turtle that lost its only neutral attack to the four-move cap
+- every exit is reachable from its map's spawn, by flood fill - procedural
+  clutter could otherwise wall a route off and strand the player
+- map generation is deterministic, so routes do not rearrange behind you
+- every exit leads somewhere and has a matching exit back
+- towns contain no encounter ground and always have a nurse and a shop
 
 Game rules deliberately avoid `Phaser.Math` (see `js/utils/MathUtils.js`) so the
-data and battle logic can be tested without a running game.
+data, map and battle logic can be tested without a running game.
 
 ### Building
 For production, you might want to:
@@ -174,13 +202,14 @@ page - phones suspend background tabs, so an interval alone loses progress. Save
 
 Edit `js/config.js` to tune the game: world size and zones, encounter rates,
 `DAMAGE_SCALE` (lower hits harder), the wild level curve, the economy, and the
-item list. Monsters themselves live in `js/data/Species.js` and moves in
-`js/data/Moves.js`.
+item list. Monsters live in `js/data/Species.js`, moves in `js/data/Moves.js`, and the
+region - towns, routes, exits, NPCs and trainer teams - in `js/data/Maps.js`.
+Adding a route means adding one entry there and an exit on its neighbour.
 
 ## 🐛 Known Issues
 
-- Water is impassable, so lake monsters are only met along the shore
 - The player always acts first in a battle; speed decides nothing yet
+- NPCs stand still; nobody walks around town
 - `js/utils/SpriteGenerator.js` is an older, unused experiment kept for reference
 
 ## 📝 License

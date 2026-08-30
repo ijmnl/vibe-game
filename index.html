@@ -33,7 +33,10 @@
                 <button class="dpad-btn dpad-right" data-direction="right" aria-label="Right">▶</button>
                 <button class="dpad-btn dpad-down" data-direction="down" aria-label="Down">▼</button>
             </div>
-            <button id="menu-btn" class="action-btn" data-action="menu" aria-label="Menu">MENU</button>
+            <div class="action-stack">
+                <button id="interact-btn" class="action-btn primary-action" data-action="interact" aria-label="Talk">A</button>
+                <button id="menu-btn" class="action-btn" data-action="menu" aria-label="Menu">MENU</button>
+            </div>
         </div>
 
         <div id="battle-ui" class="hidden">
@@ -135,18 +138,28 @@
             </div>
         </div>
 
+        <div id="dialogue-ui" class="hidden">
+            <div class="dialogue-box">
+                <span id="dialogue-speaker" class="hidden"></span>
+                <p id="dialogue-text"></p>
+                <span class="dialogue-hint">tap to continue</span>
+            </div>
+        </div>
+
         <div id="encounter-notification" class="hidden">
             <span>Wild Monster appeared!</span>
         </div>
     </div>
     <script src="js/utils/MathUtils.js"></script>
+    <script src="js/utils/Rng.js"></script>
     <script src="js/config.js"></script>
     <script src="js/data/Types.js"></script>
     <script src="js/data/Moves.js"></script>
     <script src="js/data/Species.js"></script>
+    <script src="js/data/Maps.js"></script>
     <script src="js/systems/AudioManager.js"></script>
     <script src="js/utils/SpriteFactory.js"></script>
-    <script src="js/world/WorldGenerator.js"></script>
+    <script src="js/world/WorldMap.js"></script>
     <script src="js/world/TileTextures.js"></script>
     <script src="js/entities/Monster.js"></script>
     <script src="js/entities/Player.js"></script>

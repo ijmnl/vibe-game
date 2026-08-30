@@ -145,10 +145,18 @@ body {
 .dpad-right { top: 56px; left: 112px; }
 .dpad-down  { top: 112px; left: 56px; }
 
+.action-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+    pointer-events: none;
+}
+
 .action-btn {
     pointer-events: auto;
-    min-width: 76px;
-    min-height: 76px;
+    min-width: 66px;
+    min-height: 66px;
     background: rgba(74, 74, 106, 0.75);
     color: #fff;
     border: 2px solid rgba(255, 204, 0, 0.75);
@@ -161,6 +169,72 @@ body {
 .action-btn:active {
     background: rgba(255, 204, 0, 0.85);
     color: #1a1a2e;
+}
+
+/* The talk/confirm button gets the accent so it reads as the primary action */
+.action-btn.primary-action {
+    min-width: 72px;
+    min-height: 72px;
+    background: rgba(255, 204, 0, 0.88);
+    color: #1a1a2e;
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.action-btn.primary-action:active {
+    background: rgba(255, 204, 0, 1);
+}
+
+/* Dialogue */
+#dialogue-ui {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    pointer-events: auto;
+    padding: calc(10px + var(--safe-top)) calc(10px + var(--safe-right))
+             calc(10px + var(--safe-bottom)) calc(10px + var(--safe-left));
+    z-index: 900;
+}
+
+.dialogue-box {
+    position: relative;
+    width: 100%;
+    max-width: 600px;
+    min-height: 108px;
+    background: var(--panel);
+    border: 3px solid var(--accent);
+    border-radius: 12px;
+    padding: 14px 16px 26px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#dialogue-speaker {
+    color: var(--accent);
+    font-size: 10px;
+}
+
+#dialogue-text {
+    margin: 0;
+    font-size: 10px;
+    line-height: 1.9;
+}
+
+.dialogue-hint {
+    position: absolute;
+    right: 14px;
+    bottom: 8px;
+    font-size: 8px;
+    opacity: 0.5;
+    animation: blink 1.4s infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 0.2; }
+    50%      { opacity: 0.7; }
 }
 
 /* Battle UI */
@@ -687,6 +761,11 @@ body {
 
 /* Landscape phones are short: keep the d-pad small and the panels compact */
 @media (max-height: 480px) and (orientation: landscape) {
+    .action-btn { min-width: 54px; min-height: 54px; font-size: 9px; }
+    .action-btn.primary-action { min-width: 58px; min-height: 58px; font-size: 17px; }
+    .action-stack { gap: 7px; }
+    .dialogue-box { min-height: 76px; padding: 10px 14px 22px; }
+
     /* Put the battle panel beside the monsters rather than under them -
        there is no vertical room to stack both on a short screen. */
     #battle-ui {

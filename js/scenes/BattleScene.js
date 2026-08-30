@@ -13,10 +13,11 @@ class BattleScene extends Phaser.Scene {
     }
 
     init(data) {
-        this.player = data.player;
-        this.wildMonster = data.wildMonster;
-        this.zone = data.zone;
         this.worldScene = data.worldScene;
+        this.player = data.worldScene.player;
+        this.wildMonster = data.wildMonster || null;
+        this.trainer = data.trainer || null;
+        this.zone = data.zone;
         this.enemyView = null;
         this.playerView = null;
     }
@@ -27,14 +28,21 @@ class BattleScene extends Phaser.Scene {
         this.battleSystem = this.worldScene.battleSystem;
         this.uiManager = this.worldScene.uiManager;
 
-        this.createMonsterViews();
         this.setupEventListeners();
 
-        // This scene owns the turn timers: the world scene is paused, so
+        // Start the battle before drawing anyone: startBattle() decides which
+        // monster leads, so building the views first drew whoever happened to
+        // be out at the end of the previous fight.
+        // This scene also owns the turn timers - the world scene is paused, so
         // delayed calls scheduled there would never fire.
-        this.battleSystem.startBattle(this.player, this.wildMonster, this);
+        if (this.trainer) {
+            this.battleSystem.startTrainerBattle(this.player, this.trainer, this);
+        } else {
+            this.battleSystem.startBattle(this.player, this.wildMonster, this);
+        }
 
-        // The panel is only measurable once the battle UI has been laid out
+        this.createMonsterViews();
+
         // The panel's final geometry depends on its content and the media
         // query, so settle the layout over the next couple of frames.
         [0, 80, 250].forEach(delay =>
@@ -126,12 +134,25 @@ class BattleScene extends Phaser.Scene {
     }
 
     createMonsterViews() {
-        this.enemyView = this.createMonsterView(this.wildMonster);
+        // Idempotent: a switch event can fire before this runs
+        this.destroyView(this.enemyView);
+        this.destroyView(this.playerView);
+
+        const opposing = this.battleSystem.wildMonster;
+        this.enemyView = opposing ? this.createMonsterView(opposing) : null;
 
         const mine = this.player.getCurrentMonster();
-        if (mine) this.playerView = this.createMonsterView(mine);
+        this.playerView = mine ? this.createMonsterView(mine) : null;
 
         this.positionMonsters();
+    }
+
+    destroyView(view) {
+        if (!view) return;
+
+        view.sprite.destroy();
+        view.label.destroy();
+        view.platform.destroy();
     }
 
     positionMonsters() {
@@ -223,7 +244,8 @@ class BattleScene extends Phaser.Scene {
             'battle-monster-switch': () => this.swapPlayerMonsterView(),
             'battle-move-used': (data) => this.showAttackLunge(data),
             'battle-damage': (data) => this.showDamageFlash(data),
-            'monster-evolved': () => this.swapPlayerMonsterView()
+            'monster-evolved': () => this.swapPlayerMonsterView(),
+            'battle-opponent-switch': () => this.swapOpponentView()
         };
 
         Object.entries(handlers).forEach(([event, handler]) => worldEvents.on(event, handler));
@@ -325,16 +347,21 @@ class BattleScene extends Phaser.Scene {
         });
     }
 
+    // A trainer sending out their next monster
+    swapOpponentView() {
+        const opposing = this.battleSystem.wildMonster;
+        if (!opposing) return;
+
+        this.destroyView(this.enemyView);
+        this.enemyView = this.createMonsterView(opposing);
+        this.positionMonsters();
+    }
+
     swapPlayerMonsterView() {
         const mine = this.player.getCurrentMonster();
         if (!mine) return;
 
-        if (this.playerView) {
-            this.playerView.sprite.destroy();
-            this.playerView.label.destroy();
-            this.playerView.platform.destroy();
-        }
-
+        this.destroyView(this.playerView);
         this.playerView = this.createMonsterView(mine);
         this.positionMonsters();
     }
@@ -346,12 +373,16 @@ class BattleScene extends Phaser.Scene {
             gameState.legendaryDefeated = true;
         }
 
+        if (data.result === 'win' && data.opponent && !data.opponent.isWild) {
+            this.uiManager.queueDialogue(data.opponent.title, data.opponent.defeatLines);
+        }
+
         const worldScene = this.worldScene;
         this.scene.stop();
         worldScene.resumeWorld();
 
         const messages = {
-            win: 'Victory!',
+            win: data.opponent && !data.opponent.isWild ? 'You won the battle!' : 'Victory!',
             catch: 'Caught it!',
             'catch-full': 'Caught it, but your team is full!',
             run: 'Got away safely.'

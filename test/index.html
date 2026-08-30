@@ -240,7 +240,7 @@
             
             runTest('Helper functions exist', () => {
                 ['getRandomMonsterForZone', 'getSpecies', 'getMove', 'getMovesForLevel',
-                 'getTypeMultiplier', 'getWildLevelAt'].forEach(name => {
+                 'getTypeMultiplier', 'getMapDef'].forEach(name => {
                     if (typeof window[name] !== 'function') throw new Error(`${name} missing`);
                 });
                 return true;
@@ -314,60 +314,116 @@
         function testWorld() {
             currentSection = document.getElementById('world-tests');
             
-            runTest('WorldGenerator class exists', () => {
-                if (typeof WorldGenerator === 'undefined') throw new Error('WorldGenerator not defined');
-                return true;
-            });
-            
-            runTest('WorldGenerator can be instantiated', () => {
-                const gen = new WorldGenerator();
-                if (!gen) throw new Error('Could not create WorldGenerator');
-                return true;
-            });
-            
-            runTest('WorldGenerator generates valid world', () => {
-                const gen = new WorldGenerator();
-                const world = gen.generate();
-                if (!world || world.length === 0) throw new Error('World is empty');
-                if (world.length !== CONFIG.WORLD_HEIGHT) return `World height mismatch: ${world.length} vs ${CONFIG.WORLD_HEIGHT}`;
-                return true;
-            });
-            
-            runTest('World has proper zones', () => {
-                const gen = new WorldGenerator();
-                gen.generate();
-                const zones = gen.zoneMap;
-                if (!zones || zones.length === 0) throw new Error('No zones generated');
-                return true;
-            });
-            
-            runTest('Collision map is generated', () => {
-                const gen = new WorldGenerator();
-                gen.generate();
-                if (!gen.collisionMap || gen.collisionMap.length === 0) throw new Error('No collision map');
+            runTest('WorldMap class exists', () => {
+                if (typeof WorldMap === 'undefined') throw new Error('WorldMap not defined');
                 return true;
             });
 
-            runTest('World has villages with a heal pad and a shop', () => {
-                const gen = new WorldGenerator();
-                gen.generate();
-                if (!gen.villages.length) throw new Error('No villages generated');
-
-                const types = new Set();
-                gen.worldData.forEach(row => row.forEach(tile => types.add(tile.type)));
-                ['village_heal', 'village_shop', 'lair'].forEach(type => {
-                    if (!types.has(type)) throw new Error(`Missing ${type} tile`);
+            runTest('Every map builds without error', () => {
+                Object.keys(MAPS).forEach(id => {
+                    const map = new WorldMap(id);
+                    if (map.tiles.length !== map.worldHeight) {
+                        throw new Error(`${id} height mismatch`);
+                    }
                 });
                 return true;
             });
 
-            runTest('The spawn point is walkable', () => {
-                const gen = new WorldGenerator();
-                gen.generate();
-                const spawn = gen.getPlayerSpawnPosition();
-                const tileX = Math.floor(spawn.x / CONFIG.TILE_SIZE);
-                const tileY = Math.floor(spawn.y / CONFIG.TILE_SIZE);
-                if (gen.isCollidable(tileX, tileY)) return 'Player would spawn inside a wall';
+            runTest('Map generation is deterministic', () => {
+                const a = new WorldMap('route_1');
+                const b = new WorldMap('route_1');
+
+                for (let y = 0; y < a.worldHeight; y++) {
+                    for (let x = 0; x < a.worldWidth; x++) {
+                        if (a.tiles[y][x].type !== b.tiles[y][x].type) {
+                            return `Route 1 differs at ${x},${y} between visits`;
+                        }
+                    }
+                }
+                return true;
+            });
+
+            runTest('Every exit leads somewhere, and back again', () => {
+                Object.entries(MAPS).forEach(([id, def]) => {
+                    def.exits.forEach(exit => {
+                        const target = MAPS[exit.to];
+                        if (!target) throw new Error(`${id} exits to unknown ${exit.to}`);
+
+                        const back = target.exits.find(e => e.to === id);
+                        if (!back) throw new Error(`${exit.to} has no way back to ${id}`);
+                        if (back.side !== OPPOSITE_SIDE[exit.side]) {
+                            throw new Error(`${id}/${exit.to} exits do not face each other`);
+                        }
+                    });
+                });
+                return true;
+            });
+
+            runTest('Every exit is reachable from the map spawn', () => {
+                // Flood fill from the spawn; a route whose exit is walled off
+                // would strand the player.
+                const blocked = [];
+
+                Object.keys(MAPS).forEach(id => {
+                    const map = new WorldMap(id);
+                    const spawn = map.getDefaultSpawn();
+                    const start = {
+                        x: Math.floor(spawn.x / CONFIG.TILE_SIZE),
+                        y: Math.floor(spawn.y / CONFIG.TILE_SIZE)
+                    };
+
+                    const seen = new Set([`${start.x},${start.y}`]);
+                    const queue = [start];
+
+                    while (queue.length) {
+                        const { x, y } = queue.shift();
+                        [[0,1],[0,-1],[1,0],[-1,0]].forEach(([dx, dy]) => {
+                            const nx = x + dx;
+                            const ny = y + dy;
+                            const key = `${nx},${ny}`;
+                            if (seen.has(key) || !map.inBounds(nx, ny)) return;
+                            if (WorldMap.SOLID_TILES.has(map.tiles[ny][nx].type)) return;
+                            seen.add(key);
+                            queue.push({ x: nx, y: ny });
+                        });
+                    }
+
+                    map.exits.forEach(exit => {
+                        if (!seen.has(`${exit.x},${exit.y}`)) {
+                            blocked.push(`${id} -> ${exit.to}`);
+                        }
+                    });
+                });
+
+                if (blocked.length) return `Unreachable exits: ${[...new Set(blocked)].join(', ')}`;
+                return true;
+            });
+
+            runTest('Towns are safe and have a healer and a shop', () => {
+                Object.entries(MAPS).filter(([, def]) => def.kind === 'town').forEach(([id, def]) => {
+                    const roles = (def.npcs || []).map(n => n.role);
+                    if (!roles.includes('heal')) throw new Error(`${id} has no healer`);
+                    if (!roles.includes('shop')) throw new Error(`${id} has no shop`);
+
+                    const map = new WorldMap(id);
+                    const encounterTiles = map.tiles.flat().filter(t => t.encounter);
+                    if (encounterTiles.length) throw new Error(`${id} has wild encounters`);
+                });
+                return true;
+            });
+
+            runTest('Trainer teams use real species and sane levels', () => {
+                Object.entries(MAPS).forEach(([id, def]) => {
+                    (def.npcs || []).filter(n => n.trainer).forEach(npc => {
+                        const band = def.levels || [1, 50];
+                        npc.trainer.team.forEach(([name, level]) => {
+                            if (!SPECIES[name]) throw new Error(`${id}: unknown ${name}`);
+                            if (level < band[0] - 1 || level > band[1] + 3) {
+                                throw new Error(`${id}: ${name} at ${level} is outside the route band ${band}`);
+                            }
+                        });
+                    });
+                });
                 return true;
             });
         }
@@ -407,10 +463,26 @@
                 return true;
             });
 
-            runTest('Wild levels rise with distance from home', () => {
-                const near = getWildLevelAt(50, 52);
-                const far = getWildLevelAt(50, 99);
-                if (far <= near) return `Far (${far}) is not above near (${near})`;
+            runTest('Route level bands climb along the route chain', () => {
+                const bands = ['route_1', 'route_2', 'route_3', 'ember_cave', 'dust_road']
+                    .map(id => getMapDef(id).levels);
+
+                for (let i = 1; i < bands.length; i++) {
+                    if (bands[i][0] <= bands[i - 1][0]) {
+                        return `Band ${i} (${bands[i]}) does not climb past ${bands[i - 1]}`;
+                    }
+                }
+                return true;
+            });
+
+            runTest('Route 1 is winnable with the starting team', () => {
+                const starters = [new Monster('Slime', 6), new Monster('Rat', 6)];
+                const [min, max] = getMapDef('route_1').levels;
+
+                if (max > starters[0].level) {
+                    return `Route 1 tops out at ${max}, above the level ${starters[0].level} starter`;
+                }
+                if (min < 2) return 'Route 1 monsters are below level 2';
                 return true;
             });
         }
@@ -596,11 +668,14 @@
             // Load game files
             const scripts = [
                 '../js/utils/MathUtils.js',
+                '../js/utils/Rng.js',
                 '../js/config.js',
                 '../js/data/Types.js',
                 '../js/data/Moves.js',
                 '../js/data/Species.js',
-                '../js/world/WorldGenerator.js',
+                '../js/data/Maps.js',
+                '../js/world/TileTextures.js',
+                '../js/world/WorldMap.js',
                 '../js/entities/Monster.js',
                 '../js/entities/Player.js',
                 '../js/systems/Inventory.js',

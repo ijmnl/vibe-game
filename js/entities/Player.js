@@ -17,9 +17,10 @@ class Player {
 
         this.createSprite(x, y);
 
-        // Starter team
-        this.addMonster('Slime', 5);
-        this.addMonster('Rat', 4);
+        // Starter team, a level clear of Route 1's monsters so the first few
+        // fights are winnable rather than a wall
+        this.addMonster('Slime', 6);
+        this.addMonster('Rat', 6);
 
         CONFIG.STARTING_ITEMS.forEach(item => {
             this.inventory.addItem(item.name, item.quantity);
@@ -82,7 +83,7 @@ class Player {
 
     // The player's feet are what collide, not the whole 32px sprite
     checkCollision(x, y) {
-        const world = this.scene.worldGenerator;
+        const world = this.scene.map;
         const half = CONFIG.TILE_SIZE * 0.28;
         const footY = y + CONFIG.TILE_SIZE * 0.25;
 
@@ -195,10 +196,7 @@ class Player {
     }
 
     getZone() {
-        const tile = this.getTile();
-        const data = this.scene.worldGenerator.getTileAt(tile.x, tile.y);
-
-        return data ? data.zone : 'GRASS';
+        return this.scene.map.zone;
     }
 
     getInventory() {

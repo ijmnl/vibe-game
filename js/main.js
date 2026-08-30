@@ -31,7 +31,10 @@ const gameState = {
     world: null,
     saveData: null,
     legendaryDefeated: false,
-    dexCelebrated: false
+    dexCelebrated: false,
+    defeatedTrainers: [],
+    receivedGifts: [],
+    lastTownId: STARTING_MAP
 };
 
 const SAVE_KEY = 'pixelMonsterAdventureSave';
@@ -43,8 +46,12 @@ function saveGame() {
     try {
         localStorage.setItem(SAVE_KEY, JSON.stringify({
             ...gameState.player.getSaveData(),
+            mapId: gameState.world ? gameState.world.id : STARTING_MAP,
             legendaryDefeated: gameState.legendaryDefeated,
-            dexCelebrated: gameState.dexCelebrated
+            dexCelebrated: gameState.dexCelebrated,
+            defeatedTrainers: gameState.defeatedTrainers,
+            receivedGifts: gameState.receivedGifts,
+            lastTownId: gameState.lastTownId
         }));
     } catch (e) {
         // Private browsing on iOS can refuse writes - not worth breaking play over
@@ -61,6 +68,9 @@ function loadGame() {
         gameState.saveData = JSON.parse(saveData);
         gameState.legendaryDefeated = !!gameState.saveData.legendaryDefeated;
         gameState.dexCelebrated = !!gameState.saveData.dexCelebrated;
+        gameState.defeatedTrainers = gameState.saveData.defeatedTrainers || [];
+        gameState.receivedGifts = gameState.saveData.receivedGifts || [];
+        gameState.lastTownId = gameState.saveData.lastTownId || STARTING_MAP;
 
         return gameState.saveData;
     } catch (e) {

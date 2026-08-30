@@ -8,13 +8,13 @@
 const SPECIES = {
     // --- Grassland ---
     'Slime':    { dex: 1,  type: 'Water',    stats: { hp: 45, attack: 12, defense: 12, speed: 10 }, exp: 15,
-                  moves: [[1, 'Bubble'], [1, 'Tackle'], [8, 'Harden'], [14, 'Water Jet'], [22, 'Rest']],
+                  moves: [[1, 'Bubble'], [1, 'Tackle'], [8, 'Harden'], [12, 'Water Jet'], [20, 'Rest']],
                   evolvesTo: 'Oozer', evolvesAt: 16 },
     'Oozer':    { dex: 2,  type: 'Water',    stats: { hp: 70, attack: 20, defense: 22, speed: 14 }, exp: 45,
                   moves: [[1, 'Water Jet'], [1, 'Harden'], [20, 'Body Slam'], [28, 'Tidal Wave'], [34, 'Rest']] },
 
     'Rat':      { dex: 3,  type: 'Normal',   stats: { hp: 38, attack: 16, defense: 8,  speed: 18 }, exp: 12,
-                  moves: [[1, 'Scratch'], [1, 'Quick Jab'], [9, 'Growl'], [15, 'Body Slam'], [21, 'Venom Bite']],
+                  moves: [[1, 'Scratch'], [1, 'Quick Jab'], [9, 'Growl'], [11, 'Body Slam'], [18, 'Venom Bite']],
                   evolvesTo: 'Rattler', evolvesAt: 15 },
     'Rattler':  { dex: 4,  type: 'Normal',   stats: { hp: 60, attack: 28, defense: 16, speed: 30 }, exp: 42,
                   moves: [[1, 'Quick Jab'], [1, 'Body Slam'], [19, 'Venom Bite'], [26, 'Screech'], [32, 'Focus']] },

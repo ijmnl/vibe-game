@@ -1,7 +1,7 @@
 class Minimap {
-    constructor(scene, worldGenerator) {
+    constructor(scene, map) {
         this.scene = scene;
-        this.worldGenerator = worldGenerator;
+        this.map = map;
         this.canvas = document.getElementById('minimap');
         this.ctx = this.canvas.getContext('2d');
         this.playerX = 0;
@@ -16,10 +16,16 @@ class Minimap {
         this.resizeToContainer();
     }
 
+    // Point the minimap at a freshly loaded map
+    setMap(map) {
+        this.map = map;
+        this.resizeToContainer();
+    }
+
     calculateScale() {
         this.scale = Math.min(
-            this.canvas.width / this.worldGenerator.worldWidth,
-            this.canvas.height / this.worldGenerator.worldHeight
+            this.canvas.width / this.map.worldWidth,
+            this.canvas.height / this.map.worldHeight
         );
     }
 
@@ -39,7 +45,7 @@ class Minimap {
 
     // Bake the world onto the offscreen canvas
     renderTerrain() {
-        const worldData = this.worldGenerator.worldData;
+        const worldData = this.map.tiles;
 
         this.terrainCanvas.width = this.canvas.width;
         this.terrainCanvas.height = this.canvas.height;
@@ -56,10 +62,8 @@ class Minimap {
                 const tile = worldData[y][x];
                 if (!tile) continue;
 
-                const zone = CONFIG.ZONES[tile.zone];
-                const color = this.darkenColor(zone ? zone.color : CONFIG.COLORS.grass, 0.6);
-
-                ctx.fillStyle = this.intToHex(color);
+                const base = TileTextures.BASE_COLORS[tile.type] ?? CONFIG.COLORS.grass;
+                ctx.fillStyle = this.intToHex(this.darkenColor(base, 0.75));
                 ctx.fillRect(x * this.scale, y * this.scale, tileSize, tileSize);
             }
         }
@@ -77,7 +81,7 @@ class Minimap {
 
     // Draw the minimap
     draw() {
-        if (!this.ctx || !this.worldGenerator) return;
+        if (!this.ctx || !this.map) return;
 
         this.ctx.drawImage(this.terrainCanvas, 0, 0);
 
