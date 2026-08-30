@@ -5,9 +5,9 @@ A Pokémon-inspired HTML5 game built with Phaser.js and modern JavaScript.
 ## 🎮 Game Features
 
 - **A region, not one big field**: ten connected maps - three towns, six routes
-  and a shrine hollow - joined by exits, the way a Pokémon region works. Each is
-  generated from a fixed seed, so a route looks the same every time you walk
-  back in
+  and a rest house in a clearing - joined by exits, the way a Pokémon region
+  works. Each is generated from a fixed seed, so a route looks the same every
+  time you walk back in
 - **Day and night**: a full day passes in eight minutes. The world darkens, the
   hour shows in the corner, and four monsters come out that are never seen in
   daylight
@@ -19,12 +19,19 @@ A Pokémon-inspired HTML5 game built with Phaser.js and modern JavaScript.
 - **Bonds**: a monster that fights alongside you grows closer. It lands more
   criticals, and once you are four hearts in it will refuse to go down the first
   time a hit would finish it
-- **Fusion**: a warden at the Hollow Shrine will take two of your monsters and
-  give back one that is both - a blended name, two types, a mixed base line and
-  the best moves either of them knew. It cannot be undone
+- **Mentoring**: at Willow Rest, Miriam will give one of your younger monsters
+  time with an older one. The younger learns a move the elder knows and comes
+  back further along; the elder loses nothing at all. It is also the only place
+  you get to choose which move a monster gives up
+- **Two types on some species**: a Fire/Rock beast shrugs off Fire almost
+  entirely and takes four times damage from Water. The multipliers stack both
+  ways
 - **The grass is not only monsters**: a pedlar with stock no town carries, a
   chest that is sometimes not a chest, a campfire, a stray that wants to come
-  along, and after dark, a falling star
+  along, someone hurt at the side of the road that two people have already
+  walked past, and after dark, a falling star
+- **Somewhere to rest, always free**: every town has someone who patches your
+  team up and will not take a coin for it
 - **Townsfolk and trainers**: 27 NPCs to talk to, 12 of whom will battle you
   with a full team. Trainers spot you down the line they are facing, throw up an
   exclamation and walk over. Beaten trainers stay beaten
@@ -47,7 +54,7 @@ A Pokémon-inspired HTML5 game built with Phaser.js and modern JavaScript.
 ## 🗺️ The region
 
 ```
-                                                     Hollow Shrine
+                                                      Willow Rest
                                                            ^ north
 Sprout Town ──north──> Route 1 ──north──> Greenwood        │
                                               │ east       │
@@ -63,8 +70,9 @@ Dust Road at 19-24. Wild monsters run a level hotter after dark. Talk to the
 sage in Greenwood before heading into the wood - he hands over something that
 makes the trip a great deal easier.
 
-North out of Whisper Wood is the Hollow Shrine. There is no nurse and no shop
-there; there is one thing, and it is the stone.
+North out of Whisper Wood is Willow Rest. There is no shop there - only Miriam,
+who heals anyone who walks in for nothing, and lets your young monsters learn
+from your older ones.
 
 ## 📱 Playing on your phone
 
@@ -141,9 +149,10 @@ Phaser is vendored in `vendor/`, so the game also runs offline and from a
   cannot be caught at any other time. Take a Night Ball if you meet the pedlar
 - Keeping one monster out builds its bond faster than spreading fights around.
   Four hearts in, it starts surviving hits that should have finished it
-- A fusion is two of your monsters spent on one. It hits harder and covers more
-  types - and it takes both parents' weaknesses, which can stack to four times
-  damage. Do not fuse two things that share a weakness
+- A monster with two types resists twice and folds twice. Water into a
+  Fire/Rock beast is four times damage - and Fire into it barely registers
+- The elder in a lesson loses nothing, so there is no reason not to teach.
+  Bring a strong monster and a young one you actually want to use
 - Not every rustle in the grass is a fight. Some of them are worth stopping for
 
 ## 📁 Project Structure
@@ -163,7 +172,7 @@ pokemon-game/
 │   │   ├── Moves.js       # Move definitions and status effects
 │   │   ├── Species.js     # Stats, types, learnsets, evolutions, dex numbers
 │   │   ├── Maps.js        # The region: towns, routes, exits, NPCs, trainers
-│   │   └── Fusion.js      # Blending two monsters into one
+│   │   └── Mentoring.js   # One monster teaching another
 │   ├── entities/
 │   │   ├── Player.js      # Player, team, coins, Monsterdex
 │   │   └── Monster.js     # Stats, moves, status, levelling, evolution
@@ -219,8 +228,11 @@ checks rather than code checks, and they have each caught real problems:
 - every exit leads somewhere and has a matching exit back
 - towns contain no encounter ground and always have a nurse and a shop, unless
   they are marked `plain` - in which case both counters must really be gone
-- a fusion survives a save and reload with its blended stats, types and sprite
-  intact, and never evolves out from under you
+- an elder passes on only moves it actually knows, loses nothing by it, and the
+  taught move survives the levels that come with the lesson
+- a species with two types keeps both across a save and reload
+- no dialogue line, place name, monster name or event text in the whole region
+  contains any of a list of words the game is meant to stay clear of
 - only a monster you are close to holds on at 1 HP, never from full health, and
   never twice in one battle
 - nothing nocturnal ever appears in daylight, and everything nocturnal is
@@ -250,9 +262,23 @@ chunky and crisp instead of blurry:
 ```
 
 Monsters share a handful of body shapes (blob, quadruped, winged, serpent,
-arachnid, shelled, ...) recoloured per species, so adding a monster means adding
-a colour ramp and picking a shape. The world tileset is baked once into a single
-texture and drawn as one culled tilemap layer.
+arachnid, shelled, moth, prowler, ...) recoloured per species, so adding a
+monster means adding a colour ramp and picking a shape. Characters get a soft
+ellipse baked in behind them with `destination-over`, so every person in the
+world casts a shadow without a single extra game object.
+
+The world tileset is baked once into a single texture and drawn as one culled
+tilemap layer. Each tile is drawn rather than filled: grass grows blades, trees
+have trunks and a lit canopy over a cast shadow, paths are laid as individual
+cobbles, water has crests and troughs and a glint, rock is faceted into a lit
+face and a dark one, and every surface carries a scatter of noise, because a
+flat 32px square reads as plastic.
+
+Battles are composed rather than tinted: a banded sky, a line of distant
+scenery that changes with the zone - hills, a treeline, open water, dunes, or
+stalactites coming down from a cave roof - a horizon, and ground that recedes.
+It is laid out around the battle panel, so the horizon lands in the strip you
+can actually see rather than behind the buttons.
 
 ## 🎵 Audio
 
@@ -281,9 +307,9 @@ its neighbour. NPC coordinates are relative to the centre of their map.
 
 ## 🐛 Known Issues
 
-- There is no way to swap a move out for a different one; the oldest is dropped
+- Outside a lesson at Willow Rest there is still no way to choose which move a
+  monster forgets; levelling up drops the oldest
 - The rival never travels with you, he only waits in towns
-- A fusion cannot be fused again, and cannot be undone
 - Only the monster that is out earns EXP and bond; the bench learns nothing
 - `js/utils/SpriteGenerator.js` is an older, unused experiment kept for reference
 

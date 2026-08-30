@@ -13,10 +13,9 @@ class Monster {
 
         const species = getSpecies(name);
         this.type = species.type;
-        // A second type only exists on fused monsters; everything reads types
-        // through getTypes() so one code path covers both.
-        this.secondType = null;
-        this.fusion = null;
+        // A handful of species carry a second type. Everything reads types
+        // through getTypes(), so one code path covers one type or two.
+        this.secondType = species.type2 || null;
         this.baseStats = { ...species.stats };
         this.legendary = !!species.legendary;
 
@@ -43,7 +42,7 @@ class Monster {
         return getSpecies(this.name);
     }
 
-    // Every type this monster defends with. Fusions carry two.
+    // Every type this monster defends with, and attacks with for STAB
     getTypes() {
         return this.secondType ? [this.type, this.secondType] : [this.type];
     }
@@ -52,24 +51,19 @@ class Monster {
         return this.getTypes().join('/');
     }
 
-    get isFused() {
-        return !!this.fusion;
-    }
-
     get expToLevel() {
         return CONFIG.EXP_BASE + this.level * CONFIG.EXP_PER_LEVEL;
     }
 
     getSpriteKey() {
-        return this.fusion ? `fusion-${this.fusion.parents.join('-')}` : `monster-${this.name}`;
+        return `monster-${this.name}`;
     }
 
     getColor() {
         return TYPE_COLORS[this.type] ?? 0xcccccc;
     }
 
-    // Stats grow with level from the species base line. A fusion carries its
-    // own blended base line instead, since it has no species entry.
+    // Stats grow with level from the species base line
     recalculateStats() {
         const base = this.baseStats || this.species.stats;
 
@@ -302,7 +296,7 @@ class Monster {
             }
 
             const species = this.species;
-            if (!this.fusion && species.evolvesTo && this.level >= species.evolvesAt) {
+            if (species.evolvesTo && this.level >= species.evolvesAt) {
                 const from = this.name;
                 this.evolveInto(species.evolvesTo);
                 events.push({ kind: 'evolved', from, to: this.name });
@@ -338,26 +332,12 @@ class Monster {
             exp: this.exp,
             moves: this.moves,
             pp: this.pp,
-            bond: this.bond,
-            fusion: this.fusion,
-            secondType: this.secondType,
-            type: this.type,
-            baseStats: this.fusion ? this.baseStats : undefined
+            bond: this.bond
         };
     }
 
     static fromData(data) {
         const monster = new Monster(data.name, data.level);
-
-        // A fusion has no species entry, so its own blend has to come back
-        // from the save before stats are worked out again.
-        if (data.fusion) {
-            monster.fusion = data.fusion;
-            monster.type = data.type || monster.type;
-            monster.secondType = data.secondType || null;
-            monster.baseStats = data.baseStats || monster.baseStats;
-            monster.recalculateStats();
-        }
 
         monster.hp = Math.min(data.hp ?? monster.maxHp, monster.maxHp);
         monster.exp = data.exp ?? 0;

@@ -44,38 +44,35 @@ class BattleScene extends Phaser.Scene {
         this.createMonsterViews();
 
         // The panel's final geometry depends on its content and the media
-        // query, so settle the layout over the next couple of frames.
+        // query, and the backdrop is composed around it, so settle both over
+        // the next couple of frames.
         [0, 80, 250].forEach(delay =>
-            this.time.delayedCall(delay, () => this.positionMonsters()));
+            this.time.delayedCall(delay, () => this.layoutScene()));
 
         this.scale.on('resize', this.handleResize, this);
         this.events.once('shutdown', () => this.scale.off('resize', this.handleResize, this));
     }
 
     createBackground() {
-        const zoneColor = CONFIG.ZONES[this.zone]?.color || CONFIG.COLORS.grass;
-        // A battle happens where you were standing, so it should look like it:
-        // night and weather wash over the arena the same way they do the world.
+        // A flat wash of one colour with a few ellipses on it read as a
+        // placeholder. This builds an actual scene: a graded sky, a line of
+        // distant scenery at the horizon, and ground that recedes.
+        const scheme = BattleScene.SCENES[this.zone] || BattleScene.SCENES.GRASS;
 
-        this.background = this.add
-            .rectangle(this.scale.width / 2, this.scale.height / 2,
-                       this.scale.width, this.scale.height, this.shade(zoneColor, 0.62))
-            .setOrigin(0.5, 0.5);
+        this.backdrop = this.add.container(0, 0);
+        this.backdrop.setDepth(0);
 
-        // A darker band behind the panel keeps the sprites reading as a scene
-        this.horizon = this.add
-            .rectangle(this.scale.width / 2, this.scale.height, this.scale.width, this.scale.height * 0.45,
-                       this.shade(zoneColor, 0.38))
-            .setOrigin(0.5, 1);
-
-        this.decorations = this.add.container(0, 0);
-        this.createBattleDecorations();
-
+        this.paintBackdrop(scheme);
         this.createSkyWash();
     }
 
-    // The tint of the hour and the sky, laid over the arena
+    // The tint of the hour and the sky, laid over the arena but below the
+    // combatants (depth 19 and up), so the scene reads as night without the
+    // two monsters going grey with it.
     createSkyWash() {
+        if (this.skyWash) this.skyWash.destroy();
+        this.skyWash = null;
+
         const phase = currentClock()?.phase;
         const sky = getWeather(currentWeather());
 
@@ -87,9 +84,6 @@ class BattleScene extends Phaser.Scene {
         if (!layers.length) return;
 
         const lead = layers.reduce((a, b) => (b.strength > a.strength ? b : a));
-        // Lighter than the overworld wash, and sitting below the combatants
-        // (depth 19 and up) rather than over them: the arena should read as
-        // night without the two monsters going grey with it.
         const strength = Math.min(0.42, layers.reduce((sum, l) => sum + l.strength, 0) * 0.7);
 
         this.skyWash = this.add
@@ -98,46 +92,150 @@ class BattleScene extends Phaser.Scene {
             .setDepth(15);
     }
 
-    shade(color, factor) {
-        const r = Math.floor(((color >> 16) & 0xff) * factor);
-        const g = Math.floor(((color >> 8) & 0xff) * factor);
-        const b = Math.floor((color & 0xff) * factor);
+    // Per-zone palettes: sky from top to horizon, ground from horizon down,
+    // and what stands between the two.
+    static SCENES = {
+        GRASS:   { sky: [0x6fb6f0, 0xcfe8ff], ground: [0x57ad5f, 0x2f6b38],
+                   far: 0x3f7a46, silhouette: 'hills', detail: 0x2f8f4f },
+        FOREST:  { sky: [0x86c9a4, 0xdcf2dc], ground: [0x4a8c50, 0x28542e],
+                   far: 0x245029, silhouette: 'trees', detail: 0x2f7d32 },
+        WATER:   { sky: [0x74c6ea, 0xdaf4ff], ground: [0xa8ccb0, 0x6f9c86],
+                   far: 0x3a7fd0, silhouette: 'water', detail: 0x2f7fd0 },
+        CAVE:    { sky: [0x2c2738, 0x4a4458], ground: [0x5a5468, 0x332e3e],
+                   far: 0x241f2e, silhouette: 'spikes', detail: 0x6b6274 },
+        SAND:    { sky: [0xffc46a, 0xffeccc], ground: [0xe8cb96, 0xb08a4e],
+                   far: 0xc9a86a, silhouette: 'dunes', detail: 0x9a6a3a },
+        VILLAGE: { sky: [0x8ec6f0, 0xdceaf8], ground: [0xc9b79a, 0x9a8570],
+                   far: 0x8a6a4a, silhouette: 'hills', detail: 0x8a6a4a }
+    };
 
-        return (r << 16) | (g << 8) | b;
+    // Where the ground starts, as a fraction of the visible strip
+    static HORIZON = 0.55;
+
+    // Only the strip above the battle panel is actually visible, so that is
+    // what the scene is composed for. Putting the horizon at half the *screen*
+    // buried it - and the treeline with it - behind the panel.
+    visibleHeight() {
+        const panel = this.getPanelBounds();
+
+        // In landscape the panel is pushed to one side and the full height shows
+        return panel.left > this.scale.width * 0.3
+            ? this.scale.height
+            : Math.max(120, panel.top);
     }
 
-    createBattleDecorations() {
-        const decorators = {
-            GRASS: () => this.scatter(6, 0x2f8f4f, 'tuft'),
-            FOREST: () => this.scatter(5, 0x2f7d32, 'tree'),
-            WATER: () => this.scatter(9, 0x2f7fd0, 'ripple'),
-            CAVE: () => this.scatter(6, 0x5a5a5a, 'spike'),
-            SAND: () => this.scatter(5, 0x9a6a3a, 'rock'),
-            VILLAGE: () => this.scatter(4, 0x8a6a4a, 'rock')
+    paintBackdrop(scheme) {
+        const { width, height } = this.scale;
+        const horizon = this.visibleHeight() * BattleScene.HORIZON;
+
+        this.backdrop.removeAll(true);
+
+        // Sky and ground as stacked bands. Phaser rectangles have no gradient,
+        // and baking a texture would blur when stretched, so this is banding
+        // by hand - cheap, sharp, and resolution independent.
+        this.paintBands(scheme.sky, 0, horizon, 10);
+        this.paintBands(scheme.ground, horizon, height - horizon, 8);
+
+        this.paintSilhouette(scheme, horizon);
+
+        // The horizon itself, so the two halves meet on a line
+        this.backdrop.add(this.add.rectangle(width / 2, horizon, width, 2, scheme.far, 0.5));
+
+        this.paintForeground(scheme, horizon);
+    }
+
+    paintBands(colors, top, span, count) {
+        const { width } = this.scale;
+        const bandHeight = span / count;
+
+        for (let i = 0; i < count; i++) {
+            const shade = this.mix(colors[0], colors[1], i / (count - 1));
+            const band = this.add.rectangle(
+                width / 2, top + i * bandHeight + bandHeight / 2,
+                width, bandHeight + 1, shade
+            );
+            this.backdrop.add(band);
+        }
+    }
+
+    // What stands on the horizon: hills, a treeline, water, dunes, or the
+    // roof of a cave coming down to meet the floor.
+    paintSilhouette(scheme, horizon) {
+        const { width } = this.scale;
+
+        if (scheme.silhouette === 'spikes') {
+            // Stalactites hanging from the ceiling instead of a skyline
+            for (let i = 0; i < 7; i++) {
+                const x = (width / 7) * i + width / 14;
+                const drop = Phaser.Math.Between(18, 52);
+                this.backdrop.add(this.add.triangle(
+                    x, 0, -14, 0, 14, 0, 0, drop, scheme.far
+                ).setOrigin(0, 0));
+            }
+            return;
+        }
+
+        if (scheme.silhouette === 'water') {
+            // A band of open water meeting the shore
+            this.backdrop.add(this.add.rectangle(
+                width / 2, horizon - 18, width, 36, scheme.far
+            ));
+            for (let i = 0; i < 5; i++) {
+                this.backdrop.add(this.add.rectangle(
+                    Phaser.Math.Between(0, width), horizon - Phaser.Math.Between(4, 30),
+                    Phaser.Math.Between(20, 60), 2, 0xffffff, 0.4
+                ));
+            }
+            return;
+        }
+
+        if (scheme.silhouette === 'trees') {
+            for (let i = 0; i < 9; i++) {
+                const x = (width / 9) * i + Phaser.Math.Between(-10, 10);
+                const tall = Phaser.Math.Between(30, 58);
+                this.backdrop.add(this.add.rectangle(x, horizon, 6, tall, scheme.far).setOrigin(0.5, 1));
+                this.backdrop.add(this.add.ellipse(x, horizon - tall, 34, 30, scheme.far));
+            }
+            return;
+        }
+
+        const rounded = scheme.silhouette === 'dunes';
+        for (let i = 0; i < 4; i++) {
+            const x = (width / 3) * i - width / 6;
+            const rise = Phaser.Math.Between(26, 54);
+
+            this.backdrop.add(this.add.ellipse(
+                x, horizon, width * (rounded ? 0.6 : 0.45), rise * 2, scheme.far
+            ));
+        }
+    }
+
+    // A few shapes along the bottom edge, to give the ground a near side
+    paintForeground(scheme, horizon) {
+        const width = this.scale.width;
+        const bottom = this.visibleHeight();
+
+        if (bottom - horizon < 40) return;
+
+        for (let i = 0; i < 6; i++) {
+            const x = Phaser.Math.Between(0, width);
+            const y = Phaser.Math.Between(horizon + 20, bottom - 6);
+            const size = Phaser.Math.Between(14, 40);
+
+            const shape = this.add.ellipse(x, y, size, size * 0.32, scheme.detail);
+            shape.setAlpha(0.32);
+            this.backdrop.add(shape);
+        }
+    }
+
+    mix(from, to, t) {
+        const channel = (shift) => {
+            const a = (from >> shift) & 0xff;
+            const b = (to >> shift) & 0xff;
+            return Math.round(a + (b - a) * t) << shift;
         };
 
-        (decorators[this.zone] || decorators.GRASS)();
-    }
-
-    scatter(count, color, kind) {
-        for (let i = 0; i < count; i++) {
-            const x = Phaser.Math.Between(this.scale.width * 0.05, this.scale.width * 0.95);
-            const y = Phaser.Math.Between(this.scale.height * 0.06, this.scale.height * 0.42);
-            const size = Phaser.Math.Between(10, 26);
-
-            let shape;
-            if (kind === 'tree') {
-                this.decorations.add(this.add.rectangle(x, y + size * 0.5, size * 0.25, size, 0x5a3a1a));
-                shape = this.add.ellipse(x, y, size * 1.2, size, color);
-            } else if (kind === 'spike') {
-                shape = this.add.triangle(x, y, 0, size, size * 0.5, 0, size, size, color);
-            } else {
-                shape = this.add.ellipse(x, y, size, size * 0.55, color);
-            }
-
-            shape.setAlpha(0.5);
-            this.decorations.add(shape);
-        }
+        return channel(16) | channel(8) | channel(0);
     }
 
     createMonsterView(monster) {
@@ -251,18 +349,17 @@ class BattleScene extends Phaser.Scene {
     }
 
     handleResize() {
-        if (this.background) {
-            this.background.setSize(this.scale.width, this.scale.height);
-            this.background.setPosition(this.scale.width / 2, this.scale.height / 2);
+        this.layoutScene();
+    }
+
+    // The backdrop is built from bands sized to the visible strip, so any
+    // change of shape rebuilds it rather than stretching what is there.
+    layoutScene() {
+        if (this.backdrop) {
+            this.paintBackdrop(BattleScene.SCENES[this.zone] || BattleScene.SCENES.GRASS);
+            this.createSkyWash();
         }
-        if (this.horizon) {
-            this.horizon.setSize(this.scale.width, this.scale.height * 0.45);
-            this.horizon.setPosition(this.scale.width / 2, this.scale.height);
-        }
-        if (this.skyWash) {
-            this.skyWash.setSize(this.scale.width, this.scale.height);
-            this.skyWash.setPosition(this.scale.width / 2, this.scale.height / 2);
-        }
+
         this.positionMonsters();
     }
 

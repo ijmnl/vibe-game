@@ -608,8 +608,8 @@ body {
     border-radius: 3px;
 }
 
-/* Menu, shop, dex and shrine overlays */
-#menu-ui, #shop-ui, #dex-ui, #fusion-ui {
+/* Menu, shop, dex and Willow Rest overlays */
+#menu-ui, #shop-ui, #dex-ui, #mentor-ui {
     position: absolute;
     inset: 0;
     background: rgba(0, 0, 0, 0.9);
@@ -974,9 +974,9 @@ body {
 
 .dialogue-choices .battle-btn { flex: 1; }
 
-/* --- the fusion shrine --------------------------------------------------- */
+/* --- mentoring at Willow Rest -------------------------------------------- */
 
-.fusion-hint {
+.mentor-hint {
     font-size: 8px;
     line-height: 1.6;
     opacity: 0.75;
@@ -993,9 +993,9 @@ body {
 
 .monster-row.selectable:disabled { opacity: 0.4; }
 
-.monster-row.picked { outline: 2px solid #b98fff; }
+.monster-row.picked { outline: 2px solid #7fc4ff; }
 
-.fusion-preview {
+.mentor-summary {
     background: var(--panel-soft);
     border-radius: 8px;
     padding: 10px;
@@ -1003,7 +1003,30 @@ body {
     line-height: 1.7;
 }
 
-.fusion-name { font-size: 11px; color: var(--accent); }
-.fusion-types { font-size: 8px; color: #b98fff; margin-top: 2px; }
-.fusion-stats, .fusion-moves { font-size: 7px; margin-top: 4px; }
-.fusion-cost { font-size: 8px; color: var(--accent); margin-top: 6px; }
+.mentor-pair { font-size: 10px; color: var(--accent); }
+.mentor-detail { font-size: 8px; margin-top: 6px; }
+.mentor-cost { font-size: 8px; color: var(--accent); margin-top: 6px; }
+
+/* The move buttons reuse the battle grid so they feel the same to tap */
+.mentor-moves {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+/* --- type badges --------------------------------------------------------- */
+
+.type-chips {
+    display: inline-flex;
+    gap: 3px;
+}
+
+.type-chip {
+    font-size: 6px;
+    letter-spacing: 0.5px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    color: #14141c;
+    text-shadow: none;
+}

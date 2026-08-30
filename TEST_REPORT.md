@@ -598,3 +598,151 @@ Shrine, twee monsters samensmelten, opslaan en herladen — de fusie kwam terug
 met zijn types, waarden en sprite. Geen enkele consolefout.
 
 73 tests, 0 gefaald.
+
+---
+
+# 🕊️ Ronde 6: de toon van de wereld, en betere graphics
+
+Twee losse opdrachten in één ronde: het spel mag niet tegen Bijbelse waarden
+ingaan, en de graphics moeten beter.
+
+## Wat eruit is gegaan
+
+| Was | Is nu |
+|-----|-------|
+| **Hollow Shrine** — een wachter en een steen waar twee monsters in gingen en er één uit kwam | **Willow Rest** — een rusthuis waar Miriam een jong monster tijd geeft met een ouder monster |
+| Fusie: allebei de ouders verdwenen, onomkeerbaar | Mentoring: de jongere leert een aanval en groeit; de oudere raakt niets kwijt |
+| "Whatever answers it, answers to no one" bij de top | "Het is gemaakt, net als jij en ik" |
+| Monsters **Wisp**, **Lanturne**, **Shade** (dwaallicht, geest) | **Emberfly**, **Lampwing**, **Dusker** — gewone nachtdieren |
+| `lair`-tegel als paarse altaarsteen | `den` — een hol in de rots met vuurgloed |
+| "Wens bij een vallende ster" | Even stilstaan en omhoog kijken naar wat er hangt |
+
+Er staat nu ook een test op die toon: hij leest **elke dialoogregel, elke
+NPC-naam, elke plaatsnaam, elke soortnaam en elke gebeurtenistekst** en faalt
+op woorden als shrine, altar, idol, spirit, ritual, curse of omen. Woordgrenzen
+erbij, want "omen" zit in "moment".
+
+## Wat erin is gekomen
+
+- **Mentoring** — kies een oudere en een jongere; de jongere leert één aanval
+  die de oudere kent en sluit een derde van het levelgat. Het is ook de enige
+  plek waar je zélf kiest welke aanval eruit gaat
+- **De barmhartige Samaritaan onderweg** — iemand zit gewond langs het pad, en
+  twee mensen zijn al doorgelopen. Stoppen kost je 60 munten uit eigen zak. Wat
+  hij teruggeeft is minder waard dan wat het je kostte, en dat is de bedoeling
+- **De rivaal breekt** — na het derde gevecht geeft Kes toe dat hij tegen beter
+  weten in bleef zeggen dat je geluk had, biedt zijn excuses aan, en geeft je
+  één van zijn eigen monsters
+- **Gratis rusten, overal** — een test bewaakt dat elk dorp iemand heeft die je
+  team oplapt zonder te rekenen
+- **Eerlijke weegschaal** bij de winkelier, en een oudere met een oud gezegde
+
+## Dubbele types, nu bij de soort zelf
+
+Dubbele types kwamen alleen uit fusie. Nu dragen drie soorten er zelf twee:
+**Crab** (Water/Rock), **Camel** en **Volcanor** (allebei Fire/Rock). De
+vermenigvuldigers stapelen twee kanten op:
+
+| Gevecht | winkans |
+|---|---|
+| Het grote beest tegen een voorbereid Water-team | **96%** |
+| Het grote beest tegen een Fire-team | **0%** |
+| Camel tegen een Water-tegenstander | 0% |
+
+Vier keer schade van Water, en Fire ketst er bijna volledig op af. De wachter
+bij de top zegt van tevoren "let op je team".
+
+## Balans na afloop
+
+| Gevecht | winkans |
+|---|---|
+| Rivaal 1 (vers team) | 89% |
+| Trainer Mia | 94% |
+| Route 1 overdag | 100% |
+| Route 1 's nachts | 75% |
+| Rivaal 2 | 89% |
+| Rivaal 3 | 94% |
+
+Onveranderd ten opzichte van de vorige ronde — de hernoemde nachtsoorten
+houden dezelfde waarden.
+
+## Graphics
+
+**De tileset is opnieuw getekend.** Elke tegel wordt nu getekend in plaats van
+gevuld:
+
+- gras krijgt sprieten, hoog gras krijgt hogere sprieten met een lichte punt
+- bomen hebben een stam met een lichte kant, een bladerdek in drie lagen, en
+  een schaduw op de grond
+- paden liggen als losse keien met een randje en een lichte bovenkant
+- water heeft golfkammen, dieptekleur en een glinstering
+- rots is gefacetteerd: een belichte kant en een donkere
+- zand krijgt duinribbels, muren krijgen metselwerk met voegen en een raam
+- en over alles ligt een spikkelpatroon, want een vlak van 32 bij 32 pixels
+  leest als plastic
+
+De variatie tussen de vier varianten per tegel stond op ±8 in helderheid; met
+de nieuwe textuur erbij werd een weiland daardoor zichtbaar lappendeken. Nu ±3.
+
+**Schaduwen onder iedereen.** Een zachte ellips wordt met
+`globalCompositeOperation = 'destination-over'` áchter de al getekende sprite
+gezet en in de textuur gebakken — geen extra tekenobject, en hij kan nooit uit
+de pas lopen met de sprite waar hij bij hoort.
+
+**Vier nieuwe lichaamsvormen** voor de nachtsoorten, die eerst bestaande vormen
+leenden: `moth` (brede vleugels), `firefly` (klein met een gloeiende staart),
+`lampwing` (lantaarnlijf) en `prowler` (laag viervoetig nachtdier).
+
+**Het gevechtsscherm is een scène geworden.** Geen vlakke kleur met een paar
+ellipsen meer, maar een gelaagde lucht, een horizon, en grond die wegloopt —
+met per zone iets anders aan die horizon: heuvels, een bomenrij, open water,
+duinen, of stalactieten die van een grotdak naar beneden komen.
+
+Eerst zat de horizon op de helft van het **scherm**, en dat viel precies achter
+het gevechtspaneel: je zag alleen lucht. De scène wordt nu opgebouwd rond de
+strook die je echt ziet — het paneel staat rechtop onderaan in portret en opzij
+in liggend, en de horizon volgt.
+
+**Typebadges** in het gevechtspaneel, in de kleur van het type. Met twee types
+die stapelen is weten wat er tegenover je staat geen luxe meer.
+
+## Prestaties
+
+| Telefoon | fps |
+|---|---|
+| iPhone 13 | 60 |
+| Pixel 5 | 57 |
+| Galaxy S9+ | 60 |
+
+Onveranderd: de tileset wordt één keer gebakken, en de gevechtsachtergrond is
+een stuk of dertig rechthoeken in plaats van een textuur die uitgerekt moet
+worden.
+
+## Tests
+
+Van 74 naar **78 tests, 0 gefaald**. De fusietests zijn vervangen door
+mentoring-tests:
+
+- een oudere geeft alleen aanvallen door die hij zelf kent, en de leerling
+  krijgt er minstens één level bij
+- de oudere raakt niets kwijt: geen levels, geen HP, geen aanvallen
+- fuseren van zichzelf, een te klein levelgat en een leerling die alles al kent
+  worden alle drie geweigerd
+- de speler kiest zelf welke aanval eruit gaat, en zonder die keuze weigert het
+  systeem in plaats van er stilletjes één te laten vallen
+- de aangeleerde aanval overleeft de levels die er direct bij komen — de
+  leerling kan onderweg evolueren en eigen aanvallen leren, en die mogen de
+  aangeleerde niet van de lijst duwen
+- soorten dragen hun eigen tweede type, en dat overleeft opslaan en herladen
+
+Plus de twee toon-tests: geen enkel woord uit de verboden lijst in de hele
+wereld, en elk dorp heeft gratis rust.
+
+## Doorloop
+
+Vanaf leeg opslagbestand op een geëmuleerde iPhone 13: rivaalgevecht door de UI
+uitgevochten en gewonnen, de hele regio doorlopen inclusief Willow Rest, een les
+gegeven (Slime Lv.6 met twee aanvallen kwam terug als Lv.12 met vier, Pyrefox
+raakte niets kwijt), opgeslagen en herladen. Geen enkele consolefout.
+
+78 tests, 0 gefaald.

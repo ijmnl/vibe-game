@@ -210,7 +210,7 @@ class WorldMap {
             for (let dy = -2; dy <= 2; dy++) {
                 for (let dx = -2; dx <= 2; dx++) this.set(x + dx, y + dy, 'cave_floor');
             }
-            this.set(x, y, 'lair');
+            this.set(x, y, 'den');
             this.lair = { x, y };
         }
     }

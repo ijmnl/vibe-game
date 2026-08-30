@@ -128,7 +128,7 @@
         </div>
 
         <div class="test-section">
-            <h2>Time, weather, momentum, bonds and fusion</h2>
+            <h2>Time, weather, momentum, bonds and mentoring</h2>
             <div id="systems-tests"></div>
         </div>
 
@@ -409,7 +409,7 @@
                     const roles = (def.npcs || []).map(n => n.role);
 
                     // A `plain` town is a destination rather than a rest stop -
-                    // the shrine hollow deliberately has neither counter.
+                    // Willow Rest deliberately has no shop counter.
                     if (!def.plain) {
                         if (!roles.includes('heal')) throw new Error(`${id} has no healer`);
                         if (!roles.includes('shop')) throw new Error(`${id} has no shop`);
@@ -848,7 +848,7 @@
             frame.src = frame.src; // Refresh
         }
 
-        // Time, weather, momentum, bonds and fusion
+        // Time, weather, momentum, bonds and mentoring
         function testSystems() {
             currentSection = document.getElementById('systems-tests');
 
@@ -933,7 +933,7 @@
                 return true;
             });
 
-            runTest('Effectiveness stacks across both of a fusion type', () => {
+            runTest('Effectiveness stacks across both of a monster\u2019s types', () => {
                 if (getEffectivenessAgainst('Water', ['Fire', 'Rock']) !== 4) {
                     throw new Error('a double weakness did not stack');
                 }
@@ -946,60 +946,110 @@
                 return true;
             });
 
-            runTest('Fusing blends name, types, stats and moves', () => {
-                const fox = new Monster('Fox', 14);
-                const golem = new Monster('Golem', 12);
-                const fused = fuseMonsters(fox, golem);
+            runTest('An elder passes on a move it actually knows', () => {
+                const teacher = new Monster('Pyrefox', 24);
+                const student = new Monster('Fox', 10);
 
-                if (!fused) throw new Error('fusion refused a legal pair');
-                if (fused.level !== 14) throw new Error(`level ${fused.level}, expected the higher parent`);
-                if (fused.type !== 'Fire' || fused.secondType !== 'Rock') {
-                    throw new Error(`types came out ${fused.typeLabel}`);
+                const options = teachableMoves(teacher, student);
+                if (!options.length) throw new Error('nothing to teach');
+                if (options.some(name => !teacher.moves.includes(name))) {
+                    throw new Error('offered a move the elder does not know');
                 }
-                if (!fused.moves.length || fused.moves.length > 4) {
-                    throw new Error(`${fused.moves.length} moves`);
+                if (options.some(name => student.moves.includes(name))) {
+                    throw new Error('offered a move the student already has');
                 }
-                // Every move has to come from one of the two parents
-                const parentMoves = new Set([...fox.moves, ...golem.moves]);
-                const invented = fused.moves.filter(m => !parentMoves.has(m));
-                if (invented.length) throw new Error(`invented moves: ${invented.join(', ')}`);
-                if (fused.maxHp <= Math.min(fox.maxHp, golem.maxHp)) {
-                    throw new Error('the fusion is frailer than its weaker parent');
+
+                const result = mentor(teacher, student, options[0]);
+                if (!result) throw new Error('refused a legal pairing');
+                if (!student.moves.includes(options[0])) throw new Error('the move did not stick');
+                if (result.levelsGained < 1) throw new Error('the student learned nothing but a move');
+                return true;
+            });
+
+            runTest('Mentoring costs the elder nothing', () => {
+                const teacher = new Monster('Rattler', 30);
+                const student = new Monster('Rat', 12);
+                const before = {
+                    level: teacher.level, hp: teacher.hp,
+                    moves: teacher.moves.join(','), name: teacher.name
+                };
+
+                mentor(teacher, student, teachableMoves(teacher, student)[0]);
+
+                if (teacher.level !== before.level) throw new Error('the elder lost levels');
+                if (teacher.hp !== before.hp) throw new Error('the elder lost health');
+                if (teacher.moves.join(',') !== before.moves) throw new Error('the elder lost moves');
+                if (teacher.name !== before.name) throw new Error('the elder was changed');
+                return true;
+            });
+
+            runTest('Mentoring refuses what it should refuse', () => {
+                const older = new Monster('Pyrefox', 24);
+                const barelyOlder = new Monster('Rat', 7);
+                const younger = new Monster('Rat', 6);
+
+                if (canMentor(older, older).ok) throw new Error('taught itself');
+                if (canMentor(barelyOlder, younger).ok) throw new Error('a one-level gap was allowed');
+
+                // A student that already knows the lot has nothing to gain
+                const twin = new Monster('Fox', 10);
+                const same = new Monster('Fox', 30);
+                same.moves = [...twin.moves];
+                if (canMentor(same, twin).ok) throw new Error('taught a student that knew everything');
+                return true;
+            });
+
+            runTest('The player chooses which move is given up', () => {
+                const teacher = new Monster('Oozer', 40);
+                const student = new Monster('Turtle', 34);
+                if (student.moves.length !== 4) throw new Error('this case needs a full moveset');
+
+                const learning = teachableMoves(teacher, student)[0];
+                const giving = student.moves[1];
+
+                // Naming nothing is refused rather than silently dropping one
+                const clone = Monster.fromData(student.getSaveData());
+                if (mentor(teacher, clone, learning)) throw new Error('dropped a move unasked');
+
+                const result = mentor(teacher, student, learning, giving);
+                if (!result) throw new Error('refused a legal swap');
+                if (student.moves.includes(giving)) throw new Error('kept the move it was told to drop');
+                if (!student.moves.includes(learning)) throw new Error('did not learn the new move');
+                if (student.moves.length > 4) throw new Error('ended up with five moves');
+                return true;
+            });
+
+            runTest('A move taught survives the levels that come with it', () => {
+                // The student can evolve and learn moves of its own on the way,
+                // and those must not push the taught move off the end.
+                const teacher = new Monster('Stormwing', 36);
+                const student = new Monster('Bird', 9);
+                const learning = teachableMoves(teacher, student)
+                    .find(name => !getMovesForLevel('Stormwing', 40).includes(name))
+                    || teachableMoves(teacher, student)[0];
+
+                mentor(teacher, student, learning, student.moves[0]);
+
+                if (!student.moves.includes(learning)) {
+                    throw new Error(`${learning} was lost to levelling`);
                 }
                 return true;
             });
 
-            runTest('Fusion refuses what it should refuse', () => {
-                const fox = new Monster('Fox', 10);
-                const legendary = new Monster('Volcanor', 30);
-                const fused = fuseMonsters(fox, new Monster('Rat', 10));
+            runTest('Species carry their own second type', () => {
+                const dual = DEX_ORDER.filter(name => getSpecies(name).type2);
+                if (!dual.length) throw new Error('no species has a second type');
 
-                if (canFuse(fox, fox).ok) throw new Error('fused a monster with itself');
-                if (canFuse(fox, legendary).ok) throw new Error('fused a legendary');
-                if (canFuse(fused, fox).ok) throw new Error('fused an existing fusion');
-                return true;
-            });
+                dual.forEach(name => {
+                    const monster = new Monster(name, 20);
+                    if (monster.getTypes().length !== 2) throw new Error(`${name} has one type`);
+                    if (!TYPES.includes(monster.secondType)) throw new Error(`${name} has an unknown second type`);
+                    if (monster.secondType === monster.type) throw new Error(`${name} is doubled up`);
+                });
 
-            runTest('A fusion survives being saved and loaded', () => {
-                const fused = fuseMonsters(new Monster('Owl', 18), new Monster('Crab', 16));
-                const restored = Monster.fromData(JSON.parse(JSON.stringify(fused.getSaveData())));
-
-                ['name', 'level', 'type', 'secondType', 'maxHp', 'attack', 'defense', 'speed']
-                    .forEach(field => {
-                        if (restored[field] !== fused[field]) {
-                            throw new Error(`${field}: ${restored[field]} != ${fused[field]}`);
-                        }
-                    });
-                if (!restored.isFused) throw new Error('came back as an ordinary monster');
-                if (restored.getSpriteKey() !== fused.getSpriteKey()) throw new Error('lost its sprite');
-                return true;
-            });
-
-            runTest('A fusion never evolves out from under you', () => {
-                const fused = fuseMonsters(new Monster('Slime', 14), new Monster('Rat', 14));
-                const before = fused.name;
-                fused.gainExp(100000);
-                if (fused.name !== before) throw new Error(`turned into ${fused.name}`);
+                // And it survives a save, since it comes off the species
+                const restored = Monster.fromData(new Monster(dual[0], 20).getSaveData());
+                if (restored.getTypes().length !== 2) throw new Error('lost its second type on load');
                 return true;
             });
 
@@ -1137,7 +1187,7 @@
                 return true;
             });
 
-            runTest('The shrine hollow is reachable from the region', () => {
+            runTest('Every map can be walked to from the starting town', () => {
                 const reachable = new Set([STARTING_MAP]);
                 const queue = [STARTING_MAP];
                 while (queue.length) {
@@ -1173,6 +1223,54 @@
                 return true;
             });
 
+            runTest('Nothing in the world reads as a shrine or a spirit', () => {
+                // A standing check on the tone the game was asked to keep. It
+                // reads every line of dialogue and every name in the region.
+                const banned = ['shrine', 'altar', 'idol', 'occult', 'spirit',
+                                'wraith', 'ghost', 'haunt', 'curse', 'demon',
+                                'ritual', 'omen', 'fortune', 'seance'];
+
+                const text = [];
+                Object.entries(MAPS).forEach(([id, def]) => {
+                    text.push(id, def.name);
+                    (def.npcs || []).forEach(npc => {
+                        text.push(...(npc.lines || []), ...(npc.afterGift || []));
+                        if (npc.trainer) {
+                            text.push(npc.trainer.title, ...(npc.trainer.intro || []),
+                                      ...(npc.trainer.defeat || []));
+                        }
+                    });
+                });
+                DEX_ORDER.forEach(name => text.push(name));
+                ROUTE_EVENTS.forEach(event => text.push(...event.lines, event.speaker || ''));
+
+                // Whole words only - "omen" lives inside "moment", and a
+                // substring match turns this into a nuisance rather than a guard
+                const found = [];
+                text.filter(Boolean).forEach(line => {
+                    banned.forEach(word => {
+                        if (new RegExp(`\\b${word}`, 'i').test(String(line))) {
+                            found.push(`"${word}" in "${line}"`);
+                        }
+                    });
+                });
+
+                if (found.length) throw new Error(found.slice(0, 3).join('; '));
+                return true;
+            });
+
+            runTest('Every town has somewhere to rest for nothing', () => {
+                // Healing is free everywhere and always has been; this keeps it
+                // that way if a shop is ever tempted to charge for it.
+                Object.entries(MAPS)
+                    .filter(([, def]) => def.kind === 'town')
+                    .forEach(([id, def]) => {
+                        const heals = (def.npcs || []).some(npc => npc.role === 'heal');
+                        if (!heals) throw new Error(`${id} has nowhere to rest`);
+                    });
+                return true;
+            });
+
             runTest('A Burst is worth saving a full gauge for', () => {
                 if (!(CONFIG.BURST_MULTIPLIER > 1)) throw new Error('a Burst does no extra damage');
                 if (!(BattleSystem.MAX_MOMENTUM > 0)) throw new Error('the gauge has no size');
@@ -1205,7 +1303,7 @@
                 '../js/data/Moves.js',
                 '../js/data/Species.js',
                 '../js/data/Maps.js',
-                '../js/data/Fusion.js',
+                '../js/data/Mentoring.js',
                 '../js/systems/WorldClock.js',
                 '../js/systems/Weather.js',
                 '../js/systems/RouteEvents.js',

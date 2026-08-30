@@ -230,9 +230,9 @@ const SpriteFactory = {
         Vulture:   ['#8a6a5a', '#5c453a', '#b89a86', '#e05a4a'],
         Camel:     ['#e0b878', '#ac8a52', '#f5dcae', '#ffffff'],
         Moth:      ['#a88fd0', '#6f5a96', '#cfbcf0', '#ffe98a'],
-        Wisp:      ['#6ad0ff', '#2f8ab8', '#c4f0ff', '#ffffff'],
-        Lanturne:  ['#ffb43c', '#c07a10', '#ffe08a', '#fff6d0'],
-        Shade:     ['#4a4a68', '#26263a', '#7a7a9c', '#c9c9e4'],
+        Emberfly:      ['#6ad0ff', '#2f8ab8', '#c4f0ff', '#ffffff'],
+        Lampwing:  ['#ffb43c', '#c07a10', '#ffe08a', '#fff6d0'],
+        Dusker:     ['#4a4a68', '#26263a', '#7a7a9c', '#c9c9e4'],
         Volcanor:  ['#ff5a1f', '#8c2500', '#ffa040', '#ffe8a0']
     },
 
@@ -400,6 +400,78 @@ const SpriteFactory = {
             '..kkk......kkk..',
             '................'
         ],
+        moth: [
+            '................',
+            '.......kk.......',
+            '......k44k......',
+            '..kkk.k11k.kkk..',
+            '.k333kk11kk333k.',
+            'k3311kk11kk1133k',
+            'k31141k11k14113k',
+            'k31111k11k11113k',
+            'k32111k11k11123k',
+            '.k3211k11k1123k.',
+            '..k321k11k123k..',
+            '...kk2k11k2kk...',
+            '......k22k......',
+            '.......kk.......',
+            '................',
+            '................'
+        ],
+        firefly: [
+            '................',
+            '......kkkk......',
+            '.....k3333k.....',
+            '..kk.k3113k.kk..',
+            '.k33k311113k33k.',
+            'k3113k41143k113k',
+            'k311k311113k113k',
+            '.k33kk3113kk33k.',
+            '..kk..k11k..kk..',
+            '......k44k......',
+            '.......k4k......',
+            '.......kk.......',
+            '................',
+            '................',
+            '................',
+            '................'
+        ],
+        lampwing: [
+            '................',
+            '..k...kkkk...k..',
+            '.k3k.k3333k.k3k.',
+            'k311k311113k113k',
+            'k31113111131113k',
+            'k31113411431113k',
+            'k32113111131123k',
+            '.k321k3113k123k.',
+            '..kk2.k11k.2kk..',
+            '.......k44k.....',
+            '......k4444k....',
+            '......k4444k....',
+            '.......k44k.....',
+            '........kk......',
+            '................',
+            '................'
+        ],
+        prowler: [
+            '................',
+            '..kk........kk..',
+            '.k33k......k33k.',
+            '.k131k....k131k.',
+            '.k1111kkkk1111k.',
+            'k1141111111411kk',
+            'k1111111111111k3',
+            'k1kk11111111kk33',
+            'k11111111111k333',
+            '.k3111111111k33.',
+            '.k2111111111k3..',
+            '.kk22111122kk...',
+            '..k11k..k11k....',
+            '..k22k..k22k....',
+            '..kkk....kkk....',
+            '................'
+        ],
         titan: [
             '.k............k.',
             '.k1k........k1k.',
@@ -429,8 +501,8 @@ const SpriteFactory = {
         Fish: 'finned',     Crab: 'crustacean',   Turtle: 'shelled',
         Bat: 'winged',      Snake: 'serpent',     Golem: 'boulder',
         Scorpion: 'arachnid', Vulture: 'winged', Camel: 'quadruped',
-        Moth: 'winged',     Wisp: 'blob',
-        Lanturne: 'winged', Shade: 'serpent',
+        Moth: 'moth',       Emberfly: 'firefly',
+        Lampwing: 'lampwing', Dusker: 'prowler',
         Volcanor: 'titan'
     },
 
@@ -462,6 +534,27 @@ const SpriteFactory = {
         return grid.map(row => row.split('').reverse().join(''));
     },
 
+    // A soft ellipse under a character's feet, drawn *behind* what is already
+    // on the canvas. Baked into the texture rather than added as a second
+    // game object, so it costs nothing at runtime and can never drift out of
+    // step with the sprite it belongs to.
+    addGroundShadow(ctx, x, y, size) {
+        const previous = ctx.globalCompositeOperation;
+        ctx.globalCompositeOperation = 'destination-over';
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+        ctx.beginPath();
+        ctx.ellipse(x + size * 0.5, y + size * 0.9, size * 0.3, size * 0.09, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.16)';
+        ctx.beginPath();
+        ctx.ellipse(x + size * 0.5, y + size * 0.9, size * 0.38, size * 0.13, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.globalCompositeOperation = previous;
+    },
+
     buildPlayer(scene) {
         const scale = this.SCALE;
         const size = this.CELL * scale;
@@ -478,6 +571,7 @@ const SpriteFactory = {
 
             source.forEach((grid, column) => {
                 this.paint(ctx, grid, column * size, row * size, this.PALETTE, scale);
+                this.addGroundShadow(ctx, column * size, row * size, size);
             });
         });
 
@@ -521,7 +615,9 @@ const SpriteFactory = {
             if (scene.textures.exists(key)) return;
 
             const texture = scene.textures.createCanvas(key, size, size);
-            this.paint(texture.getContext(), grid, 0, 0, { ...this.PALETTE, ...swap }, scale);
+            const ctx = texture.getContext();
+            this.paint(ctx, grid, 0, 0, { ...this.PALETTE, ...swap }, scale);
+            this.addGroundShadow(ctx, 0, 0, size);
             texture.refresh();
         });
     },
@@ -548,39 +644,6 @@ const SpriteFactory = {
             this.paint(texture.getContext(), shape, 0, 0, palette, scale);
             texture.refresh();
         });
-    },
-
-    // A fused monster has no species entry to draw from, so it is painted at
-    // the moment it is created: the second parent's body, with the first
-    // parent's head and colours over the top half. The join is meant to show.
-    buildFusion(scene, monster) {
-        const key = monster.getSpriteKey();
-        if (!monster.fusion || scene.textures.exists(key)) return key;
-
-        const [headName, bodyName] = monster.fusion.parents;
-        const scale = this.SCALE;
-        const size = this.CELL * scale;
-
-        const paletteFor = (name) => {
-            const colors = this.MONSTER_COLORS[name] || ['#888888', '#555555', '#bbbbbb', '#ffffff'];
-            return { ...this.PALETTE, '1': colors[0], '2': colors[1], '3': colors[2], '4': colors[3] };
-        };
-
-        const shapeFor = (name) => this.SHAPES[this.SPECIES_SHAPE[name] || 'blob'];
-
-        const texture = scene.textures.createCanvas(key, size, size);
-        const ctx = texture.getContext();
-
-        // Whole body from the second parent...
-        this.paint(ctx, shapeFor(bodyName), 0, 0, paletteFor(bodyName), scale);
-
-        // ...then the first parent's top half painted straight over it
-        const head = shapeFor(headName).slice(0, Math.floor(this.CELL * 0.55));
-        this.paint(ctx, head, 0, 0, paletteFor(headName), scale);
-
-        texture.refresh();
-
-        return key;
     },
 
     // Small icons drawn straight onto the world: heal pad, shop sign, etc.

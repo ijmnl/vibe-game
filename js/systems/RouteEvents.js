@@ -54,9 +54,20 @@ const ROUTE_EVENTS = [
         weight: 3,
         speaker: null,
         lines: ['A star drops across the sky and goes out behind the hills.',
-                'Whatever it was, your team stands a little taller for having seen it.'],
+                'You stand still a moment, looking at the ones that stayed put.',
+                'Your team stands a little taller for having stopped.'],
         // The night has to be worth walking into
         when: (ctx) => ctx.isNight
+    },
+    {
+        id: 'traveller',
+        weight: 3,
+        speaker: null,
+        lines: ['Someone is sitting against a rock at the side of the path, badly hurt.',
+                'Two people have gone by already. You watched the second one speed up.'],
+        // Helping costs real money, so it has to be money you have
+        choice: { yes: 'Stop and help', no: 'Keep walking' },
+        when: (ctx) => ctx.coins >= 60
     },
     {
         id: 'sheltered',

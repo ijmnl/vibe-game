@@ -24,13 +24,19 @@ const MAPS = {
                                  'One battle. Right now. Before you get a head start.'],
                          defeat: ['...Beginner\u2019s luck. I will see you up north.'] } },
             { id: 'nurse', x: -4, y: -4, sprite: 'npc-nurse', role: 'heal',
-              lines: ['Welcome to Sprout Town!', 'Rest here and your team is patched right up.'] },
+              lines: ['Welcome to Sprout Town!',
+                      'Rest here and your team is patched right up. It costs you nothing.',
+                      'It never has and it never will. That is rather the point of the place.'] },
             { id: 'clerk', x: 4, y: -4, sprite: 'npc-clerk', role: 'shop',
-              lines: ['Balls, potions, the usual.', 'Weaken a monster before you throw - it works far better.'] },
+              lines: ['Balls, potions, the usual.',
+                      'Weaken a monster before you throw - it works far better.',
+                      'And my scales are honest. You can weigh them yourself if you like.'] },
             { id: 'elder', x: -6, y: 2, sprite: 'npc-elder', wander: 2,
               lines: ['So you are the one heading north.',
                       'Monsters hide in the tall grass. Walk the path if you would rather not fight.',
-                      'Every monster has a type. Water puts out Fire, Fire burns Grass, Grass drinks Water.'] },
+                      'Every monster has a type. Water puts out Fire, Fire burns Grass, Grass drinks Water.',
+                      'And one more, from a book older than this town:',
+                      'a gentle answer turns away anger. It works on people as well as monsters.'] },
             { id: 'kid', x: 5, y: 3, sprite: 'npc-kid', wander: 2,
               lines: ['My big sister trains on Route 1!', 'She has never lost. Not once. Probably.'] },
             { id: 'coach', x: 6, y: -1, sprite: 'npc-trainer', facing: 'south', sight: 0,
@@ -96,7 +102,7 @@ const MAPS = {
         seed: 1004,
         levels: [6, 9],
         exits: [{ side: 'west', to: 'greenwood_town' }, { side: 'east', to: 'lakeside_town' },
-                { side: 'north', to: 'hollow_shrine' }],
+                { side: 'north', to: 'willow_rest' }],
         items: [{ x: -10, y: 6, item: 'Super Potion' }, { x: 11, y: -7, item: 'Super Ball' }, { x: 0, y: 8, item: 'Antidote' }],
         npcs: [
             { id: 'trainer_bram', x: -4, y: -3, sprite: 'npc-trainer', facing: 'south', sight: 4,
@@ -108,35 +114,43 @@ const MAPS = {
                          intro: ['Nothing beats a campfire and a good battle!'],
                          defeat: ['Ha! Worth every coin.'] } },
             { id: 'signpost_keeper', x: -1, y: -7, sprite: 'npc-elder', wander: 1,
-              lines: ['North of here the trees give out and there is a hollow.',
-                      'People take two monsters down there and come back with one.',
-                      'I have never had the nerve.'] }
+              lines: ['North of here the trees give out and there is a clearing.',
+                      'Old Miriam keeps a house there. Takes in anyone who is tired.',
+                      'She will let your young ones learn from your older ones, if you ask.'] }
         ]
     },
 
-    hollow_shrine: {
-        name: 'Hollow Shrine',
+    willow_rest: {
+        name: 'Willow Rest',
         kind: 'town',
         zone: 'VILLAGE',
         width: 20, height: 16,
         seed: 1010,
-        // No healer, no shop: there is one thing here and it is the shrine
+        // No shop and no counter here: Miriam patches up whoever walks in and
+        // will not take a coin for it
         plain: true,
         exits: [{ side: 'south', to: 'route_2' }],
         npcs: [
-            { id: 'warden', x: 0, y: -4, sprite: 'npc-elder', role: 'fuse',
-              lines: ['You found it, then.',
-                      'Two of yours go into the stone. One comes out.',
-                      'It keeps the first one\u2019s nature and the second one\u2019s shape - and it will carry both their weaknesses.',
-                      'Think it through. There is no undoing it.'] },
+            { id: 'miriam', x: 0, y: -4, sprite: 'npc-elder', role: 'mentor',
+              lines: ['Come in, come in. You have walked a long way.',
+                      'This is what I do here: I give a young one time with an older one.',
+                      'The elder shows it something it knows, and neither of them loses a thing by it.',
+                      'That is the whole trick. What you were given, you pass on.'] },
+            { id: 'miriam_rest', x: -3, y: -4, sprite: 'npc-nurse', role: 'heal',
+              lines: ['Sit your team down, they are worn through.',
+                      'No, put your purse away. It came to me free; it goes out free.'] },
             { id: 'stargazer', x: -5, y: 2, sprite: 'npc-kid', wander: 2,
-              lines: ['I sit out here all night, you know.',
+              lines: ['I sit out here half the night, you know.',
                       'There are monsters that only ever come out in the dark.',
-                      'And if you see a star fall - stop walking. Just watch it.'] },
+                      'And when a star falls - stop walking. Just look up.',
+                      'Somebody hung all of that. I like remembering it.'] },
             { id: 'weatherwoman', x: 5, y: 2, sprite: 'npc-nurse', wander: 2,
               lines: ['Rain lifts water and drowns fire. Sun does the reverse.',
                       'A sandstorm grinds down anything that is not stone.',
-                      'Fog makes fools of us all - everyone misses in fog.'] }
+                      'Fog makes fools of us all - everyone misses in fog.'] },
+            { id: 'miriam_boy', x: 4, y: 3, sprite: 'npc-kid', wander: 2,
+              lines: ['Miriam took me in when nobody else would.',
+                      'She says a kindness you can pay back is only a trade.'] }
         ]
     },
 
@@ -153,7 +167,13 @@ const MAPS = {
               trainer: { title: 'Rival Kes', team: [['Crab', 17], ['Stormwing', 18], ['Rattler', 18]], reward: 320,
                          intro: ['No speeches this time.', 'I have been training since the wood.'],
                          defeat: ['...You are actually good at this.',
-                                  'The cave is north. Watch yourself in there. I mean it.'] } },
+                                  'I have been telling myself since Sprout Town that you got lucky.',
+                                  'That was not true, and I knew it, and I said it anyway. I am sorry.',
+                                  'The cave is north. Watch yourself in there. I mean it.'] },
+              // Beaten and reconciled, he hands over one of his own
+              role: 'gift', gift: ['Crab', 17],
+              afterGift: ['Look after her. She was always going to like you better.',
+                          'Come and find me when you have been to the summit.'] },
             { id: 'nurse', x: -4, y: -4, sprite: 'npc-nurse', role: 'heal',
               lines: ['You look like you walked the whole wood.', 'Sit, sit. This will only take a moment.'] },
             { id: 'clerk', x: 4, y: -4, sprite: 'npc-clerk', role: 'shop',
@@ -243,7 +263,10 @@ const MAPS = {
         lair: true,
         npcs: [
             { id: 'keeper', x: -5, y: 4, sprite: 'npc-elder', wander: 2,
-              lines: ['You came all this way.', 'The shrine is ahead. Whatever answers it, answers to no one.'] }
+              lines: ['You came all this way.',
+                      'There is a den in the rock ahead, and something enormous asleep in it.',
+                      'I have watched it breathe for thirty years and never once been afraid of it.',
+                      'It was made, same as you and me. Go on, then. Mind your team.'] }
         ]
     }
 };

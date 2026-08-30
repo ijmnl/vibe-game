@@ -45,6 +45,7 @@
                     <div class="combatant">
                         <div class="monster-meta">
                             <span id="enemy-name">Wild Monster</span>
+                            <span id="enemy-types" class="type-chips"></span>
                             <span id="enemy-status" class="status-chip hidden"></span>
                             <span id="enemy-level" class="muted">Lv.5</span>
                         </div>
@@ -53,6 +54,7 @@
                     <div class="combatant mine">
                         <div class="monster-meta">
                             <span id="player-monster-name">Monster</span>
+                            <span id="player-types" class="type-chips"></span>
                             <span id="player-status" class="status-chip hidden"></span>
                             <span id="player-monster-level" class="muted">Lv.5</span>
                         </div>
@@ -148,19 +150,19 @@
             </div>
         </div>
 
-        <div id="fusion-ui" class="hidden">
+        <div id="mentor-ui" class="hidden">
             <div class="menu-panel">
                 <div class="panel-head">
-                    <h2>The Shrine</h2>
+                    <h2>Willow Rest</h2>
                     <span class="coins">💰 <span class="coin-count">0</span></span>
                 </div>
-                <p id="fusion-hint" class="fusion-hint">Choose two monsters. The first one leads.</p>
-                <div id="fusion-list" class="monster-list tall"></div>
-                <div id="fusion-preview" class="fusion-preview hidden"></div>
+                <p id="mentor-hint" class="mentor-hint"></p>
+                <div id="mentor-list" class="monster-list tall"></div>
+                <div id="mentor-summary" class="mentor-summary hidden"></div>
                 <div class="panel-actions">
-                    <button id="fuse-btn" class="battle-btn primary" disabled>Fuse</button>
-                    <button id="fusion-clear-btn" class="battle-btn">Clear</button>
-                    <button id="close-fusion-btn" class="battle-btn">Leave</button>
+                    <button id="mentor-go-btn" class="battle-btn primary" disabled>Begin</button>
+                    <button id="mentor-back-btn" class="battle-btn">Back</button>
+                    <button id="close-mentor-btn" class="battle-btn">Leave</button>
                 </div>
             </div>
         </div>
@@ -188,7 +190,7 @@
     <script src="js/data/Moves.js"></script>
     <script src="js/data/Species.js"></script>
     <script src="js/data/Maps.js"></script>
-    <script src="js/data/Fusion.js"></script>
+    <script src="js/data/Mentoring.js"></script>
     <script src="js/systems/WorldClock.js"></script>
     <script src="js/systems/Weather.js"></script>
     <script src="js/systems/RouteEvents.js"></script>

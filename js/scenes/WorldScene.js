@@ -47,7 +47,6 @@ class WorldScene extends Phaser.Scene {
         this.sky = new SkyOverlay(this);
 
         this.restoreSave();
-        this.rebuildFusionSprites();
         this.spawnNpcs();
 
         this.setupCamera();
@@ -131,14 +130,6 @@ class WorldScene extends Phaser.Scene {
             const spawn = this.map.getDefaultSpawn();
             this.player.sprite.setPosition(spawn.x, spawn.y);
         }
-    }
-
-    // A fusion's sprite is painted when it is created, which is no help to a
-    // team loaded back off disk - paint any that are missing.
-    rebuildFusionSprites() {
-        this.player.getAllMonsters()
-            .filter(monster => monster.isFused)
-            .forEach(monster => SpriteFactory.buildFusion(this, monster));
     }
 
     // --- map handling -------------------------------------------------------
@@ -415,7 +406,7 @@ class WorldScene extends Phaser.Scene {
         this.uiManager.showDialogue(npc.trainer ? npc.trainer.title : null, lines, () => {
             if (npc.role === 'heal') this.healTeam();
             if (npc.role === 'shop') this.uiManager.openShop();
-            if (npc.role === 'fuse') this.uiManager.openFusion();
+            if (npc.role === 'mentor') this.uiManager.openMentoring();
             if (npc.role === 'gift' && !alreadyGifted) this.giveGift(npc, giftKey);
         });
     }
@@ -479,8 +470,9 @@ class WorldScene extends Phaser.Scene {
             coins: () => this.findCoins(),
             stray: () => this.adoptStray(),
             campfire: () => this.restAtCampfire(),
-            'falling-star': () => this.wishOnStar(),
-            sheltered: () => this.acceptSupplies()
+            'falling-star': () => this.watchTheStar(),
+            sheltered: () => this.acceptSupplies(),
+            traveller: () => this.helpTheTraveller()
         };
 
         (handlers[event.id] || (() => {}))();
@@ -542,13 +534,32 @@ class WorldScene extends Phaser.Scene {
         this.uiManager.showMessage('Every move is fully restored.', 2400);
     }
 
-    wishOnStar() {
+    watchTheStar() {
         this.player.healAll();
         this.player.getAllMonsters().forEach(monster => monster.addBond(8));
 
         audioManager.playSfx('victory');
         this.uiManager.refreshHud();
-        this.uiManager.showMessage('Your team is fully healed, and a little closer to you.', 3200);
+        this.uiManager.showMessage('Your team is rested, and a little closer to you.', 3200);
+    }
+
+    // Stopping costs you. That is rather the point of it - so the coins go
+    // whether or not the traveller has anything to give back.
+    helpTheTraveller() {
+        const spent = Math.min(this.player.coins, 60);
+        this.player.addCoins(-spent);
+        this.player.getAllMonsters().forEach(monster => monster.addBond(12));
+
+        // What he has left is not worth what it cost you, and he knows it
+        this.player.getInventory().addItem('Full Potion', 1);
+
+        audioManager.playSfx('heal');
+        this.uiManager.refreshHud();
+        this.uiManager.showDialogue(null, [
+            `You spend ${spent} coins of your own on bandages and water, and sit with him until he can stand.`,
+            'He presses a Full Potion into your hand. It is all he has left.',
+            'Your monsters watched the whole thing. They walk closer to you afterwards.'
+        ]);
     }
 
     acceptSupplies() {
@@ -758,7 +769,7 @@ class WorldScene extends Phaser.Scene {
             case 'shop_pad':
                 this.uiManager.openShop();
                 break;
-            case 'lair':
+            case 'den':
                 this.triggerLegendary();
                 break;
         }
@@ -789,7 +800,7 @@ class WorldScene extends Phaser.Scene {
 
     triggerLegendary() {
         if (gameState.legendaryDefeated) {
-            this.uiManager.showMessage('The shrine is quiet now.', 2000);
+            this.uiManager.showMessage('The den is empty now.', 2000);
             return;
         }
 

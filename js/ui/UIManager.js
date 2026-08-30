@@ -23,6 +23,8 @@ class UIManager {
         this.playerHp = document.getElementById('player-hp');
         this.playerExp = document.getElementById('player-exp');
         this.playerStatus = document.getElementById('player-status');
+        this.enemyTypes = document.getElementById('enemy-types');
+        this.playerTypes = document.getElementById('player-types');
         this.battleLogElement = document.getElementById('battle-log');
 
         this.moveButtons = document.getElementById('move-buttons');
@@ -44,11 +46,11 @@ class UIManager {
         this.momentumFill = document.getElementById('momentum-fill');
         this.burstButton = document.getElementById('burst-btn');
 
-        this.fusionUI = document.getElementById('fusion-ui');
-        this.fusionList = document.getElementById('fusion-list');
-        this.fusionPreview = document.getElementById('fusion-preview');
-        this.fusionHint = document.getElementById('fusion-hint');
-        this.fusionPicks = [];
+        this.mentorUI = document.getElementById('mentor-ui');
+        this.mentorList = document.getElementById('mentor-list');
+        this.mentorSummary = document.getElementById('mentor-summary');
+        this.mentorHint = document.getElementById('mentor-hint');
+        this.mentorPick = {};
 
         this.dialogueUI = document.getElementById('dialogue-ui');
         this.dialogueSpeaker = document.getElementById('dialogue-speaker');
@@ -81,9 +83,9 @@ class UIManager {
 
         on('burst-btn', () => this.emitAction('burst'));
 
-        on('close-fusion-btn', () => this.closeFusion());
-        on('fusion-clear-btn', () => this.clearFusionPicks());
-        on('fuse-btn', () => this.confirmFusion());
+        on('close-mentor-btn', () => this.closeMentoring());
+        on('mentor-back-btn', () => this.stepMentoringBack());
+        on('mentor-go-btn', () => this.confirmMentoring());
 
         on('close-menu-btn', () => this.hideMenu());
         on('close-shop-btn', () => this.closeShop());
@@ -226,6 +228,7 @@ class UIManager {
             this.enemyLevel.textContent = `Lv.${wild.level}`;
             this.setHealthBar(this.enemyHealth, wild);
             this.setStatusChip(this.enemyStatus, wild);
+            this.setTypeChips(this.enemyTypes, wild);
         }
 
         if (mine) {
@@ -234,6 +237,7 @@ class UIManager {
             this.playerHp.textContent = `${mine.hp}/${mine.maxHp}`;
             this.setHealthBar(this.playerHealth, mine);
             this.setStatusChip(this.playerStatus, mine);
+            this.setTypeChips(this.playerTypes, mine);
             this.setExpBar(this.playerExp, mine);
         }
     }
@@ -254,6 +258,17 @@ class UIManager {
 
         const percent = Math.min(100, (monster.exp / monster.expToLevel) * 100);
         element.style.width = `${percent}%`;
+    }
+
+    // The types a monster carries, in their own colours. With two of them
+    // stacking multipliers, knowing what is in front of you matters.
+    setTypeChips(element, monster) {
+        if (!element) return;
+
+        element.innerHTML = monster.getTypes().map(type => {
+            const color = `#${(TYPE_COLORS[type] ?? 0xcccccc).toString(16).padStart(6, '0')}`;
+            return `<span class="type-chip" style="background:${color}">${type}</span>`;
+        }).join('');
     }
 
     setStatusChip(element, monster) {
@@ -674,144 +689,213 @@ class UIManager {
             `<span class="heart${i < filled ? ' filled' : ''}">\u2665</span>`).join('');
     }
 
-    // --- fusion shrine ------------------------------------------------------
+    // --- mentoring at Willow Rest -------------------------------------------
 
-    openFusion() {
-        this.fusionPicks = [];
-        this.fusionUI.classList.remove('hidden');
+    // One panel, walked through a step at a time: who teaches, who learns,
+    // what it learns, and - if its four moves are full - what it gives up.
+    openMentoring() {
+        this.mentorPick = { teacher: null, student: null, move: null, forget: null };
+        this.mentorUI.classList.remove('hidden');
         this.setWorldHudVisible(false);
         this.updateCoins();
-        this.renderFusion();
+        this.renderMentoring();
         touchControls.reset();
         audioManager.playSfx('shop');
     }
 
-    closeFusion() {
-        this.fusionUI.classList.add('hidden');
-        this.fusionPicks = [];
+    closeMentoring() {
+        this.mentorUI.classList.add('hidden');
+        this.mentorPick = {};
         this.setWorldHudVisible(true);
         saveGame();
     }
 
-    clearFusionPicks() {
-        this.fusionPicks = [];
-        this.renderFusion();
+    // Undo the last choice, or leave if there is nothing left to undo
+    stepMentoringBack() {
+        const pick = this.mentorPick;
+
+        if (pick.forget) pick.forget = null;
+        else if (pick.move) pick.move = null;
+        else if (pick.student) pick.student = null;
+        else if (pick.teacher) pick.teacher = null;
+        else {
+            this.closeMentoring();
+            return;
+        }
+
+        this.renderMentoring();
     }
 
-    toggleFusionPick(index) {
-        const at = this.fusionPicks.indexOf(index);
+    get mentorStep() {
+        const { teacher, student, move } = this.mentorPick;
 
-        if (at >= 0) this.fusionPicks.splice(at, 1);
-        else if (this.fusionPicks.length < 2) this.fusionPicks.push(index);
+        if (!teacher) return 'teacher';
+        if (!student) return 'student';
+        if (!move) return 'move';
+        if (student.moves.length >= 4 && !this.mentorPick.forget) return 'forget';
 
-        this.renderFusion();
+        return 'ready';
     }
 
-    renderFusion() {
-        const player = this.scene.player;
-        const monsters = player.getAllMonsters();
+    renderMentoring() {
+        const step = this.mentorStep;
+        const goButton = document.getElementById('mentor-go-btn');
 
-        this.fusionList.innerHTML = '';
+        this.mentorList.innerHTML = '';
+        this.mentorSummary.classList.add('hidden');
+        if (goButton) goButton.disabled = step !== 'ready';
 
-        monsters.forEach((monster, index) => {
-            const order = this.fusionPicks.indexOf(index);
+        const render = {
+            teacher: () => this.renderMentorTeachers(),
+            student: () => this.renderMentorStudents(),
+            move: () => this.renderMentorMoves(),
+            forget: () => this.renderMentorForget(),
+            ready: () => this.renderMentorSummary()
+        };
 
-            const row = document.createElement('button');
-            row.className = `monster-row selectable${order >= 0 ? ' picked' : ''}`;
-            row.disabled = monster.isFused || monster.legendary;
-            row.innerHTML = `
-                <div class="monster-avatar" data-key="${monster.getSpriteKey()}"></div>
-                <div class="monster-info">
-                    <div class="monster-title">
-                        <span>${order >= 0 ? `${order + 1}. ` : ''}${monster.name}</span>
-                        <span class="muted">Lv.${monster.level}</span>
-                    </div>
-                    <div class="monster-sub muted">${monster.typeLabel}${
-                        monster.isFused ? ' &middot; already fused' : ''}${
-                        monster.legendary ? ' &middot; refuses' : ''}</div>
-                </div>
-            `;
-            row.addEventListener('click', () => this.toggleFusionPick(index));
+        render[step]();
+    }
 
-            this.fusionList.appendChild(row);
+    renderMentorTeachers() {
+        this.mentorHint.textContent = 'Which of yours will teach? Pick the older one.';
+
+        this.scene.player.getAllMonsters().forEach((monster) => {
+            // What it could pass on is the only thing worth knowing here
+            this.mentorList.appendChild(this.mentorRow(monster, monster.moves.join(', '), false,
+                () => { this.mentorPick.teacher = monster; this.renderMentoring(); }));
         });
 
-        this.paintAvatars(this.fusionList);
-        this.renderFusionPreview();
+        this.paintAvatars(this.mentorList);
     }
 
-    renderFusionPreview() {
-        const player = this.scene.player;
-        const [first, second] = this.fusionPicks.map(index => player.getAllMonsters()[index]);
-        const fuseButton = document.getElementById('fuse-btn');
+    renderMentorStudents() {
+        const { teacher } = this.mentorPick;
+        this.mentorHint.textContent = `Who will learn from ${teacher.name}?`;
 
-        if (!first || !second) {
-            this.fusionPreview.classList.add('hidden');
-            this.fusionHint.textContent = this.fusionPicks.length === 1
-                ? 'Now pick the second. It gives the body, and the second type.'
-                : 'Choose two monsters. The first one leads.';
-            if (fuseButton) fuseButton.disabled = true;
-            return;
-        }
+        this.scene.player.getAllMonsters().forEach((monster) => {
+            const check = canMentor(teacher, monster);
+            const note = check.ok
+                ? `Lv.${monster.level} \u2192 Lv.${monster.level + mentoringLevelGain(teacher, monster)}`
+                : check.reason;
 
-        const check = canFuse(first, second);
-        if (!check.ok) {
-            this.fusionPreview.classList.add('hidden');
-            this.fusionHint.textContent = check.reason;
-            if (fuseButton) fuseButton.disabled = true;
-            return;
-        }
+            this.mentorList.appendChild(this.mentorRow(monster, note, !check.ok,
+                () => { this.mentorPick.student = monster; this.renderMentoring(); }));
+        });
 
-        // Build it for real to preview it, then throw the preview away
-        const preview = fuseMonsters(first, second);
-        const affordable = player.canAfford(FUSION.COST);
+        this.paintAvatars(this.mentorList);
+    }
 
-        this.fusionHint.textContent = affordable
-            ? `${first.name} and ${second.name} will not come back.`
-            : `You need ${FUSION.COST} coins for this.`;
+    renderMentorMoves() {
+        const { teacher, student } = this.mentorPick;
+        this.mentorHint.textContent = `What will ${teacher.name} show ${student.name}?`;
 
-        this.fusionPreview.classList.remove('hidden');
-        this.fusionPreview.innerHTML = `
-            <div class="fusion-name">${preview.name} <span class="muted">Lv.${preview.level}</span></div>
-            <div class="fusion-types">${preview.typeLabel}</div>
-            <div class="fusion-stats muted">
-                ${preview.maxHp} HP &middot; ${preview.attack} ATK &middot;
-                ${preview.defense} DEF &middot; ${preview.speed} SPD
+        this.mentorList.appendChild(this.moveChoiceGrid(
+            teachableMoves(teacher, student),
+            (name) => { this.mentorPick.move = name; this.renderMentoring(); }));
+    }
+
+    renderMentorForget() {
+        const { student, move } = this.mentorPick;
+        this.mentorHint.textContent =
+            `${student.name} already knows four. Which one goes, to make room for ${move}?`;
+
+        this.mentorList.appendChild(this.moveChoiceGrid(
+            student.moves,
+            (name) => { this.mentorPick.forget = name; this.renderMentoring(); }));
+    }
+
+    // Shared move picker, styled like the battle move buttons
+    moveChoiceGrid(names, onPick) {
+        const grid = document.createElement('div');
+        grid.className = 'mentor-moves';
+
+        names.forEach(name => {
+            const move = getMove(name);
+            const button = document.createElement('button');
+            button.className = 'move-btn';
+            button.dataset.type = move.type;
+            button.innerHTML = `
+                <span class="move-name">${move.name}</span>
+                <span class="move-meta">${move.type}${move.power ? ` &middot; ${move.power}` : ''} &middot; ${move.pp} PP</span>
+            `;
+            button.addEventListener('click', () => onPick(name));
+            grid.appendChild(button);
+        });
+
+        return grid;
+    }
+
+    mentorRow(monster, note, disabled, onPick) {
+        const row = document.createElement('button');
+        row.className = 'monster-row selectable';
+        row.disabled = disabled;
+        row.innerHTML = `
+            <div class="monster-avatar" data-key="${monster.getSpriteKey()}"></div>
+            <div class="monster-info">
+                <div class="monster-title">
+                    <span>${monster.name}</span>
+                    <span class="muted">Lv.${monster.level}</span>
+                </div>
+                <div class="monster-sub muted">${monster.typeLabel} &middot; ${note}</div>
             </div>
-            <div class="fusion-moves muted">${preview.moves.join(' &middot; ')}</div>
-            <div class="fusion-cost">${FUSION.COST} coins</div>
+        `;
+        row.addEventListener('click', onPick);
+
+        return row;
+    }
+
+    renderMentorSummary() {
+        const { teacher, student, move, forget } = this.mentorPick;
+        const player = this.scene.player;
+        const affordable = player.canAfford(MENTORING.COST);
+        const gained = mentoringLevelGain(teacher, student);
+
+        this.mentorHint.textContent = affordable
+            ? 'Miriam will keep them both a while. Nobody loses anything by it.'
+            : `Miriam asks ${MENTORING.COST} coins for their board.`;
+
+        this.mentorSummary.classList.remove('hidden');
+        this.mentorSummary.innerHTML = `
+            <div class="mentor-pair">${teacher.name} teaches ${student.name}</div>
+            <div class="mentor-detail">
+                Learns <strong>${move}</strong>${forget ? `, forgets ${forget}` : ''}<br>
+                Comes back at Lv.${student.level + gained} <span class="muted">(+${gained})</span>
+            </div>
+            <div class="mentor-cost">${MENTORING.COST} coins</div>
         `;
 
-        if (fuseButton) fuseButton.disabled = !affordable;
+        const goButton = document.getElementById('mentor-go-btn');
+        if (goButton) goButton.disabled = !affordable;
     }
 
-    confirmFusion() {
+    confirmMentoring() {
+        const { teacher, student, move, forget } = this.mentorPick;
         const player = this.scene.player;
-        const [firstIndex, secondIndex] = this.fusionPicks;
-        const first = player.getAllMonsters()[firstIndex];
-        const second = player.getAllMonsters()[secondIndex];
 
-        if (!first || !second || !canFuse(first, second).ok) return;
-        if (!player.canAfford(FUSION.COST)) return;
+        if (this.mentorStep !== 'ready' || !player.canAfford(MENTORING.COST)) return;
 
-        const fused = fuseMonsters(first, second);
-        if (!fused) return;
+        const result = mentor(teacher, student, move, forget);
+        if (!result) return;
 
-        player.addCoins(-FUSION.COST);
-        // Drop the higher index first so the lower one does not shift
-        [firstIndex, secondIndex].sort((a, b) => b - a)
-            .forEach(index => player.removeMonster(index));
+        player.addCoins(-MENTORING.COST);
+        gameState.lessonsGiven++;
 
-        player.monsters.push(fused);
-        SpriteFactory.buildFusion(this.scene, fused);
-        gameState.fusionsMade++;
+        // Evolving during the lesson is a real possibility, so record it
+        result.events
+            .filter(event => event.kind === 'evolved')
+            .forEach(event => player.recordCaught(student.name));
 
-        this.fusionPicks = [];
-        this.renderFusion();
+        this.mentorPick = { teacher: null, student: null, move: null, forget: null };
+        this.renderMentoring();
         this.updateCoins();
 
         audioManager.playSfx('victory');
-        this.showMessage(`${first.name} and ${second.name} became ${fused.name}!`, 4000);
+        this.showMessage(
+            `${student.name} learned ${result.learned || move}` +
+            (result.levelsGained ? ` and grew to Lv.${student.level}!` : '!'),
+            4000
+        );
+        this.checkDexCompletion();
         saveGame();
     }
 
@@ -823,7 +907,7 @@ class UIManager {
 
     // True while any full-screen panel is up, so the world ignores input
     isOverlayOpen() {
-        return [this.menuUI, this.shopUI, this.dexUI, this.battleUI, this.fusionUI]
+        return [this.menuUI, this.shopUI, this.dexUI, this.battleUI, this.mentorUI]
             .some(panel => panel && !panel.classList.contains('hidden'));
     }
 

@@ -40,7 +40,7 @@ const gameState = {
     // battle system reads straight off here
     clock: new WorldClock(),
     weather: 'clear',
-    fusionsMade: 0,
+    lessonsGiven: 0,
     eventsSeen: []
 };
 
@@ -61,7 +61,7 @@ function saveGame() {
             collectedItems: gameState.collectedItems,
             lastTownId: gameState.lastTownId,
             clock: gameState.clock.getSaveData(),
-            fusionsMade: gameState.fusionsMade,
+            lessonsGiven: gameState.lessonsGiven,
             eventsSeen: gameState.eventsSeen
         }));
     } catch (e) {
@@ -84,7 +84,7 @@ function loadGame() {
         gameState.collectedItems = gameState.saveData.collectedItems || [];
         gameState.lastTownId = gameState.saveData.lastTownId || STARTING_MAP;
         gameState.clock = new WorldClock(gameState.saveData.clock);
-        gameState.fusionsMade = gameState.saveData.fusionsMade || 0;
+        gameState.lessonsGiven = gameState.saveData.lessonsGiven || 0;
         gameState.eventsSeen = gameState.saveData.eventsSeen || [];
 
         return gameState.saveData;
