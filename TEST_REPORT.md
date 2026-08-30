@@ -377,3 +377,41 @@ Van 44 naar **49 tests, 0 gefaald**. Nieuw:
 - elke trainer met zicht heeft een kijkrichting en staart niet in een muur
 - de rivaal-keten loopt op volgorde en wordt elke keer sterker
 - rondlopende NPC's hebben een thuistegel en een redelijke straal
+
+
+---
+
+# 🩹 Controle: werkt het spel echt?
+
+Een verse doorloop vanaf leeg opslagbestand haalde één echte fout boven water.
+
+## De eerste rivaal was onwinbaar
+
+Kes stond in het startdorp met **Bird L6 vooraan**. Bird is Electric en snel, en
+Electric doet dubbele schade op Water — precies het type van je starter. Gemeten
+over 400 gesimuleerde teamgevechten:
+
+| | winkans voor een verse speler |
+|---|---|
+| Zoals ingesteld (Bird vooraan) | **4%** |
+| Met de Rat vooraan | 26% |
+| Rat vooraan, allebei level 5 | **88%** |
+
+Het allereerste gevecht van het spel was dus zo goed als niet te winnen, en je
+kunt niet vluchten voor een trainer. Zijn team is nu Rat L5 gevolgd door Bird L5:
+88%. Een echt gevecht, maar te winnen.
+
+De latere ontmoetingen waren wel goed: fase 2 op 92%, fase 3 op 70%.
+
+## Wat verder gecontroleerd is
+
+Doorloop op een geëmuleerde iPhone 13, vanaf niets: rivaal verslaan (+80 munten,
+opgeslagen als verslagen), naar Route 1, voorwerp oprapen, wild gevecht, naar
+Greenwood, de Fox cadeau krijgen, iets kopen, opslaan, herladen — alles kwam
+terug zoals het was. Geen enkele consolefout.
+
+Route 1 met je volledige startteam: **100%** tegen alles wat er rondloopt. Maar
+met alleen je Slime tegen een Bird: **7%**. Wisselen van monster is dus geen
+luxe maar de bedoeling.
+
+49 tests, 0 gefaald.

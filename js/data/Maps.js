@@ -17,7 +17,9 @@ const MAPS = {
         npcs: [
             { id: 'rival_1', x: 0, y: -6, sprite: 'npc-rival', facing: 'south', sight: 0,
               rivalStage: 1,
-              trainer: { title: 'Rival Kes', team: [['Bird', 6], ['Rat', 6]], reward: 80,
+              // Leads with the Normal-type Rat on purpose: his Bird is Electric,
+              // and opening with it against a Water starter was a 4% fight.
+              trainer: { title: 'Rival Kes', team: [['Rat', 5], ['Bird', 5]], reward: 80,
                          intro: ['There you are!', 'My gran gave me a monster too, you know.',
                                  'One battle. Right now. Before you get a head start.'],
                          defeat: ['...Beginner\u2019s luck. I will see you up north.'] } },
