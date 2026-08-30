@@ -47,11 +47,11 @@ class EncounterSystem {
         };
     }
 
-    triggerEncounter() {
+    triggerEncounter(allowEvents = true) {
         this.encounterCooldown = CONFIG.ENCOUNTER_COOLDOWN;
 
         // Not every rustle in the grass is a monster
-        if (Math.random() < ROUTE_EVENT_CHANCE) {
+        if (allowEvents && Math.random() < ROUTE_EVENT_CHANCE) {
             const event = rollRouteEvent(this.eventContext());
             if (event) {
                 this.scene.events.emit('route-event', { event });
@@ -76,8 +76,10 @@ class EncounterSystem {
         });
     }
 
+    // Always a battle, never an event - the name has to mean what it says,
+    // or a test asking for a fight sometimes gets a pedlar instead.
     forceEncounter() {
-        this.triggerEncounter();
+        this.triggerEncounter(false);
     }
 
     isEncounterActive() {

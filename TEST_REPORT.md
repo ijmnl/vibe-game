@@ -501,6 +501,8 @@ precies de afweging.
 | 4 | Fusiesprites verdwenen na herladen | De sprite werd alleen bij het samensmelten getekend; na een herstart had het monster geen textuur meer |
 | 5 | Meldingen stapelden op elkaar | Twee meldingen tegelijk werden letterlijk over elkaar heen gedrukt, midden over een open menu |
 | 6 | "The chest held a Antidote" | Lidwoord klopte niet bij klinkers |
+| 7 | Het gevechtslog sneed de bovenste regel doormidden | De hoogte was geen heel aantal regels; naar beneden gescrold bleef er een halve regel staan, wat op een tekenfout lijkt |
+| 8 | `forceEncounter()` gaf soms een gebeurtenis in plaats van een gevecht | Sinds gebeurtenissen bestaan liep die functie door dezelfde loterij. De naam loog, en tests werden wisselvallig |
 
 ### 1. Nacht op Route 1 was een muur
 
