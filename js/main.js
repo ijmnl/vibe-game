@@ -34,6 +34,7 @@ const gameState = {
     dexCelebrated: false,
     defeatedTrainers: [],
     receivedGifts: [],
+    collectedItems: [],
     lastTownId: STARTING_MAP
 };
 
@@ -51,6 +52,7 @@ function saveGame() {
             dexCelebrated: gameState.dexCelebrated,
             defeatedTrainers: gameState.defeatedTrainers,
             receivedGifts: gameState.receivedGifts,
+            collectedItems: gameState.collectedItems,
             lastTownId: gameState.lastTownId
         }));
     } catch (e) {
@@ -70,6 +72,7 @@ function loadGame() {
         gameState.dexCelebrated = !!gameState.saveData.dexCelebrated;
         gameState.defeatedTrainers = gameState.saveData.defeatedTrainers || [];
         gameState.receivedGifts = gameState.saveData.receivedGifts || [];
+        gameState.collectedItems = gameState.saveData.collectedItems || [];
         gameState.lastTownId = gameState.saveData.lastTownId || STARTING_MAP;
 
         return gameState.saveData;

@@ -34,6 +34,7 @@ const TileTextures = {
         'heal_pad',
         'shop_pad',
         'exit',
+        'item_ball',
         'lair'
     ],
 
@@ -61,6 +62,7 @@ const TileTextures = {
         heal_pad: 0xc9b79a,
         shop_pad: 0xc9b79a,
         exit: 0xd8c9a8,
+        item_ball: 0x8a7a5a,
         lair: 0x4a3550
     },
 

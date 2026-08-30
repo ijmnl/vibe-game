@@ -7,8 +7,12 @@ A Pokémon-inspired HTML5 game built with Phaser.js and modern JavaScript.
 - **A region, not one big field**: nine connected maps - three towns and six
   routes - joined by exits, the way a Pokémon region works. Each is generated
   from a fixed seed, so a route looks the same every time you walk back in
-- **Townsfolk and trainers**: 24 NPCs to talk to, 9 of whom will battle you
-  with a full team. Beaten trainers stay beaten
+- **Townsfolk and trainers**: 27 NPCs to talk to, 12 of whom will battle you
+  with a full team. Trainers spot you down the line they are facing, throw up an
+  exclamation and walk over. Beaten trainers stay beaten
+- **A rival** who turns up in each town with a stronger team than last time
+- **Things to find**: 12 items hidden off the paths, remembered once taken
+- **Towns that move**: the locals wander their patch instead of standing frozen
 - **20 monsters to collect**, each with a fixed type, its own pixel art, its own
   learnset, and several with evolutions
 - **Turn-based battles with real choices**: pick from up to four moves, each
@@ -67,7 +71,8 @@ Phaser is vendored in `vendor/`, so the game also runs offline and from a
 
 ## 🚀 How to Play
 
-1. **Move**: the on-screen D-pad on a phone, or arrow keys / WASD on a desktop
+1. **Move**: the on-screen D-pad on a phone, or arrow keys / WASD on a desktop.
+   Keep holding a direction and you break into a run
 2. **Talk**: the **A** button, or Space / Enter. Face someone and press it -
    NPCs give directions, hints, and occasionally a monster
 3. **Find monsters**: only the tall grass, rubble and scrub hide them. Stay on
@@ -94,6 +99,8 @@ Phaser is vendored in `vendor/`, so the game also runs offline and from a
 - Strong moves have few uses. Save Inferno for something that deserves it -
   run every move dry and you are left with Struggle, which hurts you too
 - A fast monster that moves first can win a fight it would otherwise lose
+- Trainers only see straight ahead. Slip around behind one and it will not notice
+- The glinting balls off the path are worth the detour
 - Trainers give far more EXP and coins than wild monsters
 - Losing costs a fifth of your coins and sends you back to the last town -
   never your monsters or your progress
@@ -211,13 +218,14 @@ page - phones suspend background tabs, so an interval alone loses progress. Save
 Edit `js/config.js` to tune the game: world size and zones, encounter rates,
 `DAMAGE_SCALE` (lower hits harder), the wild level curve, the economy, and the
 item list. Monsters live in `js/data/Species.js`, moves in `js/data/Moves.js`, and the
-region - towns, routes, exits, NPCs and trainer teams - in `js/data/Maps.js`.
-Adding a route means adding one entry there and an exit on its neighbour.
+region - towns, routes, exits, NPCs, trainer teams and hidden items - in
+`js/data/Maps.js`. Adding a route means adding one entry there and an exit on
+its neighbour. NPC coordinates are relative to the centre of their map.
 
 ## 🐛 Known Issues
 
-- NPCs stand still; nobody walks around town
-- There is no way to swap a move out for a different one
+- There is no way to swap a move out for a different one; the oldest is dropped
+- The rival never travels with you, he only waits in towns
 - `js/utils/SpriteGenerator.js` is an older, unused experiment kept for reference
 
 ## 📝 License

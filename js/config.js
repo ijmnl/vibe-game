@@ -12,6 +12,9 @@ const CONFIG = {
     
     // Player settings
     PLAYER_SPEED: 200,
+    // Hold a direction and you speed up, so crossing a route is not a slog
+    RUN_AFTER_MS: 350,
+    RUN_MULTIPLIER: 1.75,
     PLAYER_START_X: 50,
     PLAYER_START_Y: 50,
     

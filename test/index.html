@@ -412,13 +412,112 @@
                 return true;
             });
 
+            runTest('Every hidden item sits somewhere you can stand', () => {
+                const stuck = [];
+                Object.keys(MAPS).forEach(id => {
+                    const map = new WorldMap(id);
+                    map.items.forEach(item => {
+                        if (map.isCollidable(item.x, item.y)) stuck.push(`${id} ${item.item}`);
+                        if (!CONFIG.ITEMS[item.item]) throw new Error(`${id}: unknown item ${item.item}`);
+                    });
+                });
+                if (stuck.length) return `Unreachable pickups: ${stuck.join(', ')}`;
+                return true;
+            });
+
+            runTest('Every hidden item is reachable from the spawn', () => {
+                const stranded = [];
+                Object.keys(MAPS).forEach(id => {
+                    const map = new WorldMap(id);
+                    if (!map.items.length) return;
+
+                    const spawn = map.getDefaultSpawn();
+                    const start = {
+                        x: Math.floor(spawn.x / CONFIG.TILE_SIZE),
+                        y: Math.floor(spawn.y / CONFIG.TILE_SIZE)
+                    };
+                    const seen = new Set([`${start.x},${start.y}`]);
+                    const queue = [start];
+
+                    while (queue.length) {
+                        const { x, y } = queue.shift();
+                        [[0,1],[0,-1],[1,0],[-1,0]].forEach(([dx, dy]) => {
+                            const nx = x + dx, ny = y + dy, key = `${nx},${ny}`;
+                            if (seen.has(key) || !map.inBounds(nx, ny)) return;
+                            if (WorldMap.SOLID_TILES.has(map.tiles[ny][nx].type)) return;
+                            seen.add(key);
+                            queue.push({ x: nx, y: ny });
+                        });
+                    }
+
+                    map.items.forEach(item => {
+                        if (!seen.has(`${item.x},${item.y}`)) stranded.push(`${id} ${item.item}`);
+                    });
+                });
+                if (stranded.length) return `Walled-off pickups: ${stranded.join(', ')}`;
+                return true;
+            });
+
+            runTest('Trainers with sight face a direction and can see', () => {
+                Object.keys(MAPS).forEach(id => {
+                    const map = new WorldMap(id);
+                    map.npcs.filter(n => n.sight > 0).forEach(npc => {
+                        if (!npc.facing) throw new Error(`${id}: ${npc.id} has sight but no facing`);
+                        if (!npc.trainer) throw new Error(`${id}: ${npc.id} has sight but is not a trainer`);
+                        if (map.tilesInFront(npc).length === 0) {
+                            throw new Error(`${id}: ${npc.id} is staring straight into a wall`);
+                        }
+                    });
+                });
+                return true;
+            });
+
+            runTest('The rival chain runs in order', () => {
+                const rivals = Object.entries(MAPS)
+                    .flatMap(([id, def]) => (def.npcs || [])
+                        .filter(n => n.rivalStage)
+                        .map(n => ({ map: id, ...n })))
+                    .sort((a, b) => a.rivalStage - b.rivalStage);
+
+                if (rivals.length < 2) return 'Fewer than two rival meetings';
+                if (rivals[0].requires) return 'The first meeting should not be gated';
+
+                for (let i = 1; i < rivals.length; i++) {
+                    const expected = `${rivals[i - 1].map}:${rivals[i - 1].id}`;
+                    if (rivals[i].requires !== expected) {
+                        return `Stage ${rivals[i].rivalStage} requires ${rivals[i].requires}, expected ${expected}`;
+                    }
+                    const prevTop = Math.max(...rivals[i - 1].trainer.team.map(t => t[1]));
+                    const thisTop = Math.max(...rivals[i].trainer.team.map(t => t[1]));
+                    if (thisTop <= prevTop) return `Stage ${rivals[i].rivalStage} is not stronger than the last`;
+                }
+                return true;
+            });
+
+            runTest('Wandering NPCs stay in reach of where they started', () => {
+                Object.keys(MAPS).forEach(id => {
+                    const map = new WorldMap(id);
+                    map.npcs.filter(n => n.wander).forEach(npc => {
+                        if (npc.homeX === undefined || npc.homeY === undefined) {
+                            throw new Error(`${id}: ${npc.id} has no home tile`);
+                        }
+                        if (npc.wander < 1 || npc.wander > 4) {
+                            throw new Error(`${id}: ${npc.id} wanders too far (${npc.wander})`);
+                        }
+                    });
+                });
+                return true;
+            });
+
             runTest('Trainer teams use real species and sane levels', () => {
                 Object.entries(MAPS).forEach(([id, def]) => {
                     (def.npcs || []).filter(n => n.trainer).forEach(npc => {
                         const band = def.levels || [1, 50];
+                        // The rival is deliberately ahead of the local curve
+                        const slack = npc.rivalStage ? 12 : 3;
                         npc.trainer.team.forEach(([name, level]) => {
                             if (!SPECIES[name]) throw new Error(`${id}: unknown ${name}`);
-                            if (level < band[0] - 1 || level > band[1] + 3) {
+                            if (level < band[0] - 1 || level > band[1] + slack) {
                                 throw new Error(`${id}: ${name} at ${level} is outside the route band ${band}`);
                             }
                         });

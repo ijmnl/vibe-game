@@ -5,6 +5,7 @@ class Player {
         this.direction = 'down';
         this.isMoving = false;
         this.sprite = null;
+        this.movingFor = 0;   // ms held in one go, used to break into a run
 
         this.monsters = [];
         this.currentMonsterIndex = 0;
@@ -42,8 +43,12 @@ class Player {
     move(direction, delta) {
         this.direction = direction;
         this.isMoving = true;
+        this.movingFor += delta;
 
-        const step = this.speed * delta / 1000;
+        // Keep going and you break into a run - a route is a long walk otherwise
+        const running = this.movingFor > CONFIG.RUN_AFTER_MS;
+        const speed = this.speed * (running ? CONFIG.RUN_MULTIPLIER : 1);
+        const step = speed * delta / 1000;
         let newX = this.sprite.x;
         let newY = this.sprite.y;
 
@@ -55,6 +60,7 @@ class Player {
         }
 
         this.playAnimation(`walk-${direction}`);
+        this.sprite.anims.timeScale = running ? 1.5 : 1;
 
         // Slide along walls instead of sticking to them: try the full move,
         // then each axis on its own.
@@ -102,7 +108,13 @@ class Player {
 
     stopMoving() {
         this.isMoving = false;
+        this.movingFor = 0;
+        this.sprite.anims.timeScale = 1;
         this.playAnimation(`idle-${this.direction}`);
+    }
+
+    isRunning() {
+        return this.isMoving && this.movingFor > CONFIG.RUN_AFTER_MS;
     }
 
     // --- team ---------------------------------------------------------------

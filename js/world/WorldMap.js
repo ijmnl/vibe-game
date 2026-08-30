@@ -31,6 +31,7 @@ class WorldMap {
         this.tiles = [];
         this.exits = [];     // { x, y, to, side }
         this.npcs = [];
+        this.items = [];     // { x, y, item }
         this.lair = null;
 
         this.rng = new Rng(this.def.seed);
@@ -49,7 +50,23 @@ class WorldMap {
         }
 
         this.carveExits();
+        this.placeItems();
         this.placeNpcs();
+    }
+
+    // Pickups sit off the beaten path, so wandering off it pays
+    placeItems() {
+        const cx = Math.floor(this.worldWidth / 2);
+        const cy = Math.floor(this.worldHeight / 2);
+
+        this.items = (this.def.items || []).map(def => {
+            const x = clamp(cx + def.x, 1, this.worldWidth - 2);
+            const y = clamp(cy + def.y, 1, this.worldHeight - 2);
+
+            // Make sure it is standable and reachable
+            this.set(x, y, this.pathTileFor(this.zone));
+            return { x, y, item: def.item };
+        });
     }
 
     baseTileFor(zone) {
@@ -298,7 +315,7 @@ class WorldMap {
             // Make sure an NPC never stands in a wall, and can be reached
             this.clearForPath(x, y);
 
-            return { ...def, x, y };
+            return { ...def, x, y, homeX: x, homeY: y };
         });
     }
 
@@ -334,6 +351,39 @@ class WorldMap {
 
     getNpcAt(x, y) {
         return this.npcs.find(npc => npc.x === Math.floor(x) && npc.y === Math.floor(y)) || null;
+    }
+
+    getItemAt(x, y) {
+        return this.items.find(item => item.x === Math.floor(x) && item.y === Math.floor(y)) || null;
+    }
+
+    // Can something stand here? Used by wandering NPCs.
+    isFree(x, y, ignoreNpc = null) {
+        if (!this.inBounds(x, y)) return false;
+        if (WorldMap.SOLID_TILES.has(this.tiles[y][x].type)) return false;
+        if (this.getExitAt(x, y)) return false;
+
+        return !this.npcs.some(npc => npc !== ignoreNpc && npc.x === x && npc.y === y);
+    }
+
+    // Everything a trainer can see straight ahead, until something blocks it
+    tilesInFront(npc) {
+        const step = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0],
+                       north: [0, -1], south: [0, 1], west: [-1, 0], east: [1, 0] }[npc.facing || 'south'];
+        if (!step || !npc.sight) return [];
+
+        const seen = [];
+        for (let i = 1; i <= npc.sight; i++) {
+            const x = npc.x + step[0] * i;
+            const y = npc.y + step[1] * i;
+
+            if (!this.inBounds(x, y)) break;
+            if (WorldMap.SOLID_TILES.has(this.tiles[y][x].type)) break;
+
+            seen.push({ x, y });
+        }
+
+        return seen;
     }
 
     // Where the player appears when entering from a neighbouring map

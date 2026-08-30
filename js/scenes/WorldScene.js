@@ -13,10 +13,13 @@ class WorldScene extends Phaser.Scene {
         this.interactKeys = null;
 
         this.npcSprites = [];
+        this.itemSprites = [];
         this.tilemap = null;
         this.worldLayer = null;
         this.lastTileType = null;
         this.transitioning = false;
+        this.wanderTimer = null;
+        this.challenging = false;
     }
 
     create() {
@@ -48,7 +51,10 @@ class WorldScene extends Phaser.Scene {
         this.uiManager.refreshHud();
 
         this.scale.on('resize', this.handleResize, this);
-        this.events.once('shutdown', () => this.scale.off('resize', this.handleResize, this));
+        this.events.once('shutdown', () => {
+            this.scale.off('resize', this.handleResize, this);
+            if (this.wanderTimer) this.wanderTimer.remove();
+        });
 
         gameState.player = this.player;
         gameState.world = this.map;
@@ -95,8 +101,12 @@ class WorldScene extends Phaser.Scene {
     }
 
     spawnNpcs() {
-        this.npcSprites.forEach(sprite => sprite.destroy());
+        this.npcSprites.forEach(entry => entry.sprite.destroy());
         this.npcSprites = [];
+
+        // The rival only shows up once you have met the previous version of him
+        this.map.npcs = this.map.npcs.filter(npc =>
+            !npc.requires || gameState.defeatedTrainers.includes(npc.requires));
 
         this.map.npcs.forEach(npc => {
             if (npc.trainer && gameState.defeatedTrainers.includes(this.trainerKey(npc))) {
@@ -110,7 +120,86 @@ class WorldScene extends Phaser.Scene {
                 npc.sprite || 'npc-elder'
             );
             sprite.setDepth(9);
-            this.npcSprites.push(sprite);
+            this.npcSprites.push({ npc, sprite });
+        });
+
+        this.spawnItems();
+        this.startWandering();
+    }
+
+    spawnItems() {
+        this.itemSprites.forEach(entry => entry.sprite.destroy());
+        this.itemSprites = [];
+
+        // Anything already picked up stays picked up
+        this.map.items = this.map.items.filter(item =>
+            !gameState.collectedItems.includes(this.itemKey(item)));
+
+        this.map.items.forEach(item => {
+            const sprite = this.add.image(
+                item.x * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 2,
+                item.y * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 2,
+                'icon-item'
+            );
+            sprite.setDepth(6);
+
+            // A gentle bob so it catches the eye from a distance
+            this.tweens.add({
+                targets: sprite,
+                y: sprite.y - 3,
+                duration: 700,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+
+            this.itemSprites.push({ item, sprite });
+        });
+    }
+
+    itemKey(item) {
+        return `${this.map.id}:${item.x},${item.y}`;
+    }
+
+    // Townsfolk shuffle about within a couple of tiles of where they started
+    startWandering() {
+        if (this.wanderTimer) this.wanderTimer.remove();
+
+        this.wanderTimer = this.time.addEvent({
+            delay: 900,
+            loop: true,
+            callback: () => this.stepWanderers()
+        });
+    }
+
+    stepWanderers() {
+        if (this.transitioning || this.battleSystem.isActive()) return;
+        if (this.uiManager.isDialogueOpen() || this.uiManager.isOverlayOpen()) return;
+
+        this.npcSprites.forEach(({ npc, sprite }) => {
+            if (!npc.wander || !randomInt(0, 1)) return;
+
+            const step = randomFrom([[0, 1], [0, -1], [1, 0], [-1, 0]]);
+            const x = npc.x + step[0];
+            const y = npc.y + step[1];
+
+            // Stay near home, off the player, and out of walls
+            if (Math.abs(x - npc.homeX) > npc.wander || Math.abs(y - npc.homeY) > npc.wander) return;
+            if (!this.map.isFree(x, y, npc)) return;
+
+            const player = this.player.getTile();
+            if (player.x === x && player.y === y) return;
+
+            npc.x = x;
+            npc.y = y;
+
+            this.tweens.add({
+                targets: sprite,
+                x: x * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 2,
+                y: y * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 2,
+                duration: 380,
+                ease: 'Sine.easeInOut'
+            });
         });
     }
 
@@ -140,6 +229,7 @@ class WorldScene extends Phaser.Scene {
         this.minimap.setPlayerPosition(this.player.getPosition());
 
         this.lastTileType = null;
+        this.challenging = false;
         gameState.world = this.map;
 
         // Losing sends you back to the last town you set foot in
@@ -374,6 +464,70 @@ class WorldScene extends Phaser.Scene {
         this.encounterSystem.update(delta);
         this.minimap.update();
         this.checkTileUnderPlayer();
+        this.checkTrainerSight();
+    }
+
+    // A trainer who can see you down the line they are facing will call you out
+    checkTrainerSight() {
+        if (this.challenging || this.battleSystem.isActive()) return;
+
+        const player = this.player.getTile();
+
+        const spotter = this.map.npcs.find(npc =>
+            npc.trainer && !npc.beaten && npc.sight
+            && this.map.tilesInFront(npc).some(t => t.x === player.x && t.y === player.y));
+
+        if (spotter) this.trainerSpotsPlayer(spotter);
+    }
+
+    trainerSpotsPlayer(npc) {
+        this.challenging = true;
+        this.player.stopMoving();
+        touchControls.reset();
+
+        const entry = this.npcSprites.find(e => e.npc === npc);
+        audioManager.playSfx('shop');
+
+        // "!" over their head, then they walk over
+        if (entry) {
+            const mark = this.add.text(entry.sprite.x, entry.sprite.y - 22, '!', {
+                fontFamily: 'monospace', fontSize: '20px', color: '#ffcc00',
+                stroke: '#000000', strokeThickness: 4
+            }).setOrigin(0.5, 0.5).setDepth(30);
+
+            this.tweens.add({ targets: mark, y: mark.y - 8, duration: 260, yoyo: true, repeat: 1,
+                              onComplete: () => mark.destroy() });
+        }
+
+        this.time.delayedCall(700, () => {
+            const player = this.player.getTile();
+            const stopBefore = { x: player.x, y: player.y };
+            const step = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0],
+                           north: [0, -1], south: [0, 1], west: [-1, 0], east: [1, 0] }[npc.facing];
+
+            // Stand one tile short of the player
+            npc.x = stopBefore.x - step[0];
+            npc.y = stopBefore.y - step[1];
+
+            if (entry) {
+                this.tweens.add({
+                    targets: entry.sprite,
+                    x: npc.x * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 2,
+                    y: npc.y * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 2,
+                    duration: 420,
+                    onComplete: () => this.beginChallenge(npc)
+                });
+            } else {
+                this.beginChallenge(npc);
+            }
+        });
+    }
+
+    beginChallenge(npc) {
+        this.uiManager.showDialogue(npc.trainer.title, npc.trainer.intro, () => {
+            this.challenging = false;
+            this.startTrainerBattle(npc);
+        });
     }
 
     getInputDirection() {
@@ -403,6 +557,9 @@ class WorldScene extends Phaser.Scene {
     checkTileUnderPlayer() {
         const tile = this.player.getTile();
 
+        const pickup = this.map.getItemAt(tile.x, tile.y);
+        if (pickup) this.collectItem(pickup);
+
         const exit = this.map.getExitAt(tile.x, tile.y);
         if (exit) {
             this.changeMap(exit.to);
@@ -424,6 +581,29 @@ class WorldScene extends Phaser.Scene {
                 this.triggerLegendary();
                 break;
         }
+    }
+
+    collectItem(pickup) {
+        this.player.getInventory().addItem(pickup.item, 1);
+        gameState.collectedItems.push(this.itemKey(pickup));
+
+        const entry = this.itemSprites.find(e => e.item === pickup);
+        if (entry) {
+            this.tweens.add({
+                targets: entry.sprite,
+                y: entry.sprite.y - 18,
+                alpha: 0,
+                duration: 420,
+                onComplete: () => entry.sprite.destroy()
+            });
+            this.itemSprites = this.itemSprites.filter(e => e !== entry);
+        }
+
+        this.map.items = this.map.items.filter(i => i !== pickup);
+
+        audioManager.playSfx('caught');
+        this.uiManager.showMessage(`Found a ${pickup.item}!`, 2000);
+        saveGame();
     }
 
     triggerLegendary() {

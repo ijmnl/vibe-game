@@ -332,3 +332,48 @@ Van 38 naar **44 tests, 0 gefaald**. Nieuw: beurtvolgorde volgt prioriteit en
 dan snelheid, verlamming halveert snelheid, elke aanval heeft PP en sterkere
 aanvallen minder, leeg raken valt terug op Struggle, de verpleegster vult PP aan,
 en teamvolgorde wijzigen werkt inclusief de randgevallen aan begin en eind.
+
+
+---
+
+# 🌾 Vijfde ronde: leven in de wereld
+
+## Trainers zien je nu aankomen
+
+Elke trainer heeft een kijkrichting en een zichtafstand. Loop je door hun blikveld,
+dan verschijnt er een **!** boven hun hoofd, lopen ze naar je toe en beginnen ze
+het gesprek. Je kunt er ook omheen sluipen — ze kijken alleen recht vooruit.
+
+## Voorwerpen om te vinden
+
+12 stuks verspreid over de routes, net naast het pad, met een licht wippende
+glinstering zodat je ze van een afstand ziet. Eenmaal opgeraapt blijven ze weg,
+ook na herladen.
+
+## Een rivaal
+
+Kes duikt op in elk van de drie dorpen, met steeds een sterker team (level 6 →
+12 → 18) en een doorlopend gesprek. Hij verschijnt pas als je de vorige
+ontmoeting hebt gewonnen.
+
+## Dorpen bewegen
+
+Bewoners scharrelen rond binnen een paar tegels van hun startplek. De
+verpleegster en winkelier blijven staan waar ze horen.
+
+## Rennen
+
+Blijf je een richting vasthouden, dan versnel je na 350ms naar 1,75x. Gemeten
+per frame in een open stuk: 3,2px lopend, 5,6px rennend — exact de ingestelde
+factor. Een eerdere meting over afstand gaf een verkeerd beeld doordat de speler
+tegen bomen aanliep; per frame meten haalde dat weg.
+
+## Tests
+
+Van 44 naar **49 tests, 0 gefaald**. Nieuw:
+
+- elk verstopt voorwerp ligt op een begaanbare tegel én is bereikbaar vanaf het
+  startpunt (opnieuw via flood fill)
+- elke trainer met zicht heeft een kijkrichting en staart niet in een muur
+- de rivaal-keten loopt op volgorde en wordt elke keer sterker
+- rondlopende NPC's hebben een thuistegel en een redelijke straal
