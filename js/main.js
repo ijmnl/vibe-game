@@ -35,7 +35,13 @@ const gameState = {
     defeatedTrainers: [],
     receivedGifts: [],
     collectedItems: [],
-    lastTownId: STARTING_MAP
+    lastTownId: STARTING_MAP,
+    // The hour of the day and what the sky is doing, both of which the
+    // battle system reads straight off here
+    clock: new WorldClock(),
+    weather: 'clear',
+    fusionsMade: 0,
+    eventsSeen: []
 };
 
 const SAVE_KEY = 'pixelMonsterAdventureSave';
@@ -53,7 +59,10 @@ function saveGame() {
             defeatedTrainers: gameState.defeatedTrainers,
             receivedGifts: gameState.receivedGifts,
             collectedItems: gameState.collectedItems,
-            lastTownId: gameState.lastTownId
+            lastTownId: gameState.lastTownId,
+            clock: gameState.clock.getSaveData(),
+            fusionsMade: gameState.fusionsMade,
+            eventsSeen: gameState.eventsSeen
         }));
     } catch (e) {
         // Private browsing on iOS can refuse writes - not worth breaking play over
@@ -74,6 +83,9 @@ function loadGame() {
         gameState.receivedGifts = gameState.saveData.receivedGifts || [];
         gameState.collectedItems = gameState.saveData.collectedItems || [];
         gameState.lastTownId = gameState.saveData.lastTownId || STARTING_MAP;
+        gameState.clock = new WorldClock(gameState.saveData.clock);
+        gameState.fusionsMade = gameState.saveData.fusionsMade || 0;
+        gameState.eventsSeen = gameState.saveData.eventsSeen || [];
 
         return gameState.saveData;
     } catch (e) {

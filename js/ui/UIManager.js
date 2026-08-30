@@ -41,11 +41,23 @@ class UIManager {
         this.dexList = document.getElementById('dex-list');
         this.coinCounters = document.querySelectorAll('.coin-count');
 
+        this.momentumFill = document.getElementById('momentum-fill');
+        this.burstButton = document.getElementById('burst-btn');
+
+        this.fusionUI = document.getElementById('fusion-ui');
+        this.fusionList = document.getElementById('fusion-list');
+        this.fusionPreview = document.getElementById('fusion-preview');
+        this.fusionHint = document.getElementById('fusion-hint');
+        this.fusionPicks = [];
+
         this.dialogueUI = document.getElementById('dialogue-ui');
         this.dialogueSpeaker = document.getElementById('dialogue-speaker');
         this.dialogueText = document.getElementById('dialogue-text');
+        this.dialogueChoices = document.getElementById('dialogue-choices');
+        this.dialogueHint = document.getElementById('dialogue-hint');
         this.dialogueQueue = [];
         this.dialogueDone = null;
+        this.dialogueChoice = null;
 
         this.setupEventListeners();
     }
@@ -67,6 +79,12 @@ class UIManager {
         on('items-back-btn', () => this.showBattlePanel('main'));
         on('team-back-btn', () => this.showBattlePanel('main'));
 
+        on('burst-btn', () => this.emitAction('burst'));
+
+        on('close-fusion-btn', () => this.closeFusion());
+        on('fusion-clear-btn', () => this.clearFusionPicks());
+        on('fuse-btn', () => this.confirmFusion());
+
         on('close-menu-btn', () => this.hideMenu());
         on('close-shop-btn', () => this.closeShop());
         on('close-dex-btn', () => this.hideDex());
@@ -75,10 +93,20 @@ class UIManager {
 
         touchControls.onMenu = () => this.toggleMenu();
 
-        // Tapping anywhere on the dialogue box advances it
+        // Tapping anywhere on the dialogue box advances it - unless it is
+        // waiting on a choice, where the buttons are the only way on.
         if (this.dialogueUI) {
-            this.dialogueUI.addEventListener('click', () => this.advanceDialogue());
+            this.dialogueUI.addEventListener('click', (event) => {
+                if (event.target.closest('.dialogue-choices')) return;
+                if (this.dialogueChoice && !this.dialogueQueue.length) return;
+                this.advanceDialogue();
+            });
         }
+
+        const yes = document.getElementById('dialogue-yes');
+        const no = document.getElementById('dialogue-no');
+        if (yes) yes.addEventListener('click', () => this.answerChoice(true));
+        if (no) no.addEventListener('click', () => this.answerChoice(false));
 
         const events = this.scene.events;
         events.on('battle-start', (data) => this.showBattleUI(data));
@@ -88,6 +116,7 @@ class UIManager {
         events.on('battle-heal', () => this.updateBattleBars());
         events.on('battle-exp', (data) => this.showExpGain(data));
         events.on('battle-damage', () => this.updateBattleBars());
+        events.on('battle-momentum', (data) => this.updateMomentum(data));
         events.on('battle-monster-switch', () => this.updateBattleBars());
         events.on('battle-monster-faint', () => this.updateBattleBars());
         events.on('monster-evolved', () => this.updateBattleBars());
@@ -124,6 +153,27 @@ class UIManager {
         if (positionEl) positionEl.textContent = `X:${tileX} Y:${tileY}`;
 
         if (zoneEl) zoneEl.textContent = this.scene.map.name;
+
+        this.updateSky();
+    }
+
+    // The hour and the sky, which between them decide what you will meet.
+    // The clock ticks several times a second, so only touch the DOM when the
+    // text it would write has actually changed.
+    updateSky() {
+        const element = document.getElementById('world-sky');
+        if (!element) return;
+
+        const clock = gameState.clock;
+        const sky = getWeather(gameState.weather);
+        const icon = sky.id === 'clear' ? clock.phase.icon : sky.icon;
+        const label = `${icon} ${clock.timeLabel}`;
+
+        if (label === this.lastSkyLabel) return;
+        this.lastSkyLabel = label;
+
+        element.textContent = label;
+        element.title = `${clock.phase.label} - ${sky.label}`;
     }
 
     // --- battle UI ----------------------------------------------------------
@@ -133,6 +183,7 @@ class UIManager {
         this.setWorldHudVisible(false);
         this.showBattlePanel('main');
         this.battleLogElement.innerHTML = '';
+        this.updateMomentum({ momentum: 0, max: BattleSystem.MAX_MOMENTUM });
         this.updateBattleBars(data);
     }
 
@@ -235,7 +286,7 @@ class UIManager {
 
             // Show how this move lands on what is in front of you
             const multiplier = opponent && move.power
-                ? getTypeMultiplier(move.type, opponent.type)
+                ? getEffectivenessAgainst(move.type, opponent.getTypes())
                 : 1;
             const hint = multiplier > 1 ? '<span class="hint good">▲</span>'
                 : multiplier < 1 ? '<span class="hint bad">▼</span>'
@@ -269,11 +320,31 @@ class UIManager {
             if (button) button.disabled = !interactive;
         });
 
+        const battle = this.scene.battleSystem;
+        if (this.burstButton && battle) {
+            this.burstButton.disabled = !interactive || !battle.momentumFull || battle.burstArmed;
+        }
+
         this.moveButtons.querySelectorAll('button').forEach(button => {
             button.disabled = !interactive;
         });
 
         if (!interactive) this.showBattlePanel('main');
+    }
+
+    // The momentum gauge, and the Burst it pays for
+    updateMomentum({ momentum = 0, max = 100, armed = false } = {}) {
+        if (this.momentumFill) {
+            this.momentumFill.style.width = `${Math.min(100, (momentum / max) * 100)}%`;
+            this.momentumFill.classList.toggle('full', momentum >= max);
+        }
+
+        if (this.burstButton) {
+            this.burstButton.disabled = momentum < max || armed;
+            this.burstButton.classList.toggle('ready', momentum >= max && !armed);
+            this.burstButton.classList.toggle('armed', armed);
+            this.burstButton.textContent = armed ? 'ARMED' : 'BURST';
+        }
     }
 
     // Flash the bar gold while experience is being added
@@ -399,7 +470,8 @@ class UIManager {
                         <span class="exp-label muted">EXP</span>
                         <div class="exp-bar"><div class="exp-fill" style="width:${expPercent}%"></div></div>
                     </div>
-                    <div class="monster-sub muted">${monster.type} &middot; ${monster.hp}/${monster.maxHp} HP &middot; ${monster.exp}/${monster.expToLevel} to Lv.${monster.level + 1}</div>
+                    <div class="monster-sub muted">${monster.typeLabel} &middot; ${monster.hp}/${monster.maxHp} HP &middot; ${monster.exp}/${monster.expToLevel} to Lv.${monster.level + 1}</div>
+                    <div class="bond-row" title="Bond">${this.renderHearts(monster)}</div>
                 </div>
             `;
 
@@ -476,7 +548,12 @@ class UIManager {
 
     // --- shop ---------------------------------------------------------------
 
-    openShop() {
+    // `stock` is a list of item names; without one this is an ordinary town
+    // shop, which never carries the pedlar's rarities.
+    openShop(stock = null, title = 'Shop') {
+        this.shopStock = stock;
+        this.shopUI.querySelector('h2').textContent = title;
+
         this.shopUI.classList.remove('hidden');
         this.setWorldHudVisible(false);
         this.renderShop();
@@ -486,6 +563,7 @@ class UIManager {
 
     closeShop() {
         this.shopUI.classList.add('hidden');
+        this.shopStock = null;
         this.setWorldHudVisible(true);
 
         // Keep the shop tile marked as handled, otherwise the next frame sees
@@ -499,7 +577,9 @@ class UIManager {
         this.shopList.innerHTML = '';
 
         Object.entries(CONFIG.ITEMS)
-            .filter(([, item]) => item.price > 0)
+            .filter(([name, item]) => this.shopStock
+                ? this.shopStock.includes(name)
+                : item.price > 0 && !item.rare)
             .forEach(([name, item]) => {
                 const affordable = this.scene.player.canAfford(item.price);
 
@@ -586,6 +666,155 @@ class UIManager {
         audioManager.playSfx('victory');
     }
 
+    // Five hearts, filled in as a monster gets closer to the player
+    renderHearts(monster) {
+        const filled = monster.bondHearts;
+
+        return Array.from({ length: 5 }, (_, i) =>
+            `<span class="heart${i < filled ? ' filled' : ''}">\u2665</span>`).join('');
+    }
+
+    // --- fusion shrine ------------------------------------------------------
+
+    openFusion() {
+        this.fusionPicks = [];
+        this.fusionUI.classList.remove('hidden');
+        this.setWorldHudVisible(false);
+        this.updateCoins();
+        this.renderFusion();
+        touchControls.reset();
+        audioManager.playSfx('shop');
+    }
+
+    closeFusion() {
+        this.fusionUI.classList.add('hidden');
+        this.fusionPicks = [];
+        this.setWorldHudVisible(true);
+        saveGame();
+    }
+
+    clearFusionPicks() {
+        this.fusionPicks = [];
+        this.renderFusion();
+    }
+
+    toggleFusionPick(index) {
+        const at = this.fusionPicks.indexOf(index);
+
+        if (at >= 0) this.fusionPicks.splice(at, 1);
+        else if (this.fusionPicks.length < 2) this.fusionPicks.push(index);
+
+        this.renderFusion();
+    }
+
+    renderFusion() {
+        const player = this.scene.player;
+        const monsters = player.getAllMonsters();
+
+        this.fusionList.innerHTML = '';
+
+        monsters.forEach((monster, index) => {
+            const order = this.fusionPicks.indexOf(index);
+
+            const row = document.createElement('button');
+            row.className = `monster-row selectable${order >= 0 ? ' picked' : ''}`;
+            row.disabled = monster.isFused || monster.legendary;
+            row.innerHTML = `
+                <div class="monster-avatar" data-key="${monster.getSpriteKey()}"></div>
+                <div class="monster-info">
+                    <div class="monster-title">
+                        <span>${order >= 0 ? `${order + 1}. ` : ''}${monster.name}</span>
+                        <span class="muted">Lv.${monster.level}</span>
+                    </div>
+                    <div class="monster-sub muted">${monster.typeLabel}${
+                        monster.isFused ? ' &middot; already fused' : ''}${
+                        monster.legendary ? ' &middot; refuses' : ''}</div>
+                </div>
+            `;
+            row.addEventListener('click', () => this.toggleFusionPick(index));
+
+            this.fusionList.appendChild(row);
+        });
+
+        this.paintAvatars(this.fusionList);
+        this.renderFusionPreview();
+    }
+
+    renderFusionPreview() {
+        const player = this.scene.player;
+        const [first, second] = this.fusionPicks.map(index => player.getAllMonsters()[index]);
+        const fuseButton = document.getElementById('fuse-btn');
+
+        if (!first || !second) {
+            this.fusionPreview.classList.add('hidden');
+            this.fusionHint.textContent = this.fusionPicks.length === 1
+                ? 'Now pick the second. It gives the body, and the second type.'
+                : 'Choose two monsters. The first one leads.';
+            if (fuseButton) fuseButton.disabled = true;
+            return;
+        }
+
+        const check = canFuse(first, second);
+        if (!check.ok) {
+            this.fusionPreview.classList.add('hidden');
+            this.fusionHint.textContent = check.reason;
+            if (fuseButton) fuseButton.disabled = true;
+            return;
+        }
+
+        // Build it for real to preview it, then throw the preview away
+        const preview = fuseMonsters(first, second);
+        const affordable = player.canAfford(FUSION.COST);
+
+        this.fusionHint.textContent = affordable
+            ? `${first.name} and ${second.name} will not come back.`
+            : `You need ${FUSION.COST} coins for this.`;
+
+        this.fusionPreview.classList.remove('hidden');
+        this.fusionPreview.innerHTML = `
+            <div class="fusion-name">${preview.name} <span class="muted">Lv.${preview.level}</span></div>
+            <div class="fusion-types">${preview.typeLabel}</div>
+            <div class="fusion-stats muted">
+                ${preview.maxHp} HP &middot; ${preview.attack} ATK &middot;
+                ${preview.defense} DEF &middot; ${preview.speed} SPD
+            </div>
+            <div class="fusion-moves muted">${preview.moves.join(' &middot; ')}</div>
+            <div class="fusion-cost">${FUSION.COST} coins</div>
+        `;
+
+        if (fuseButton) fuseButton.disabled = !affordable;
+    }
+
+    confirmFusion() {
+        const player = this.scene.player;
+        const [firstIndex, secondIndex] = this.fusionPicks;
+        const first = player.getAllMonsters()[firstIndex];
+        const second = player.getAllMonsters()[secondIndex];
+
+        if (!first || !second || !canFuse(first, second).ok) return;
+        if (!player.canAfford(FUSION.COST)) return;
+
+        const fused = fuseMonsters(first, second);
+        if (!fused) return;
+
+        player.addCoins(-FUSION.COST);
+        // Drop the higher index first so the lower one does not shift
+        [firstIndex, secondIndex].sort((a, b) => b - a)
+            .forEach(index => player.removeMonster(index));
+
+        player.monsters.push(fused);
+        SpriteFactory.buildFusion(this.scene, fused);
+        gameState.fusionsMade++;
+
+        this.fusionPicks = [];
+        this.renderFusion();
+        this.updateCoins();
+
+        audioManager.playSfx('victory');
+        this.showMessage(`${first.name} and ${second.name} became ${fused.name}!`, 4000);
+        saveGame();
+    }
+
     // --- dialogue -----------------------------------------------------------
 
     isDialogueOpen() {
@@ -594,13 +823,14 @@ class UIManager {
 
     // True while any full-screen panel is up, so the world ignores input
     isOverlayOpen() {
-        return [this.menuUI, this.shopUI, this.dexUI, this.battleUI]
+        return [this.menuUI, this.shopUI, this.dexUI, this.battleUI, this.fusionUI]
             .some(panel => panel && !panel.classList.contains('hidden'));
     }
 
     showDialogue(speaker, lines, onDone = null) {
         this.dialogueQueue = [...(lines || [])];
         this.dialogueDone = onDone;
+        this.dialogueChoice = null;
 
         this.dialogueSpeaker.textContent = speaker || '';
         this.dialogueSpeaker.classList.toggle('hidden', !speaker);
@@ -608,6 +838,38 @@ class UIManager {
         this.dialogueUI.classList.remove('hidden');
         this.setWorldHudVisible(false);
         this.advanceDialogue(true);
+    }
+
+    // The same box, but the last line waits on a yes or a no instead of a tap
+    showChoice(speaker, lines, options, onChoose) {
+        this.showDialogue(speaker, lines, null);
+        this.dialogueChoice = { options, onChoose };
+
+        // The lines may already have run out on a single-line prompt
+        if (!this.dialogueQueue.length) this.presentChoice();
+    }
+
+    presentChoice() {
+        if (!this.dialogueChoice || !this.dialogueChoices) return;
+
+        const { options } = this.dialogueChoice;
+        document.getElementById('dialogue-yes').textContent = options.yes;
+        document.getElementById('dialogue-no').textContent = options.no;
+
+        this.dialogueChoices.classList.remove('hidden');
+        if (this.dialogueHint) this.dialogueHint.classList.add('hidden');
+    }
+
+    answerChoice(accepted) {
+        const choice = this.dialogueChoice;
+        if (!choice) return;
+
+        this.dialogueChoice = null;
+        this.dialogueChoices.classList.add('hidden');
+        if (this.dialogueHint) this.dialogueHint.classList.remove('hidden');
+
+        this.closeDialogue();
+        choice.onChoose(accepted);
     }
 
     // Show a conversation once the battle panel has closed
@@ -621,16 +883,28 @@ class UIManager {
         if (!this.isDialogueOpen() && !first) return;
 
         if (this.dialogueQueue.length === 0) {
+            // A prompt waits here for an answer rather than closing
+            if (this.dialogueChoice) {
+                this.presentChoice();
+                return;
+            }
+
             this.closeDialogue();
             return;
         }
 
         this.dialogueText.textContent = this.dialogueQueue.shift();
+
+        // Show the buttons as the final line goes up, not a tap later
+        if (!this.dialogueQueue.length && this.dialogueChoice) this.presentChoice();
     }
 
     closeDialogue() {
         this.dialogueUI.classList.add('hidden');
         this.setWorldHudVisible(true);
+
+        if (this.dialogueChoices) this.dialogueChoices.classList.add('hidden');
+        if (this.dialogueHint) this.dialogueHint.classList.remove('hidden');
 
         const done = this.dialogueDone;
         this.dialogueDone = null;
@@ -646,6 +920,11 @@ class UIManager {
     }
 
     showMessage(message, duration = 2000) {
+        // Messages are all positioned in the same spot, so a second one
+        // arriving while the first is up printed the two on top of each
+        // other. The newest is the one that matters.
+        document.querySelectorAll('.game-message').forEach(old => old.remove());
+
         const element = document.createElement('div');
         element.className = 'game-message';
         element.textContent = message;

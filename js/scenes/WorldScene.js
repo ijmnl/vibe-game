@@ -20,7 +20,12 @@ class WorldScene extends Phaser.Scene {
         this.transitioning = false;
         this.wanderTimer = null;
         this.challenging = false;
+        this.sky = null;
+        this.weatherTimer = 0;
     }
+
+    // How long a stretch of weather lasts before it is re-rolled
+    static WEATHER_MS = 75000;
 
     create() {
         SpriteFactory.build(this);
@@ -39,8 +44,10 @@ class WorldScene extends Phaser.Scene {
         this.encounterSystem.init(this.player);
 
         this.minimap = new Minimap(this, this.map);
+        this.sky = new SkyOverlay(this);
 
         this.restoreSave();
+        this.rebuildFusionSprites();
         this.spawnNpcs();
 
         this.setupCamera();
@@ -54,6 +61,7 @@ class WorldScene extends Phaser.Scene {
         this.events.once('shutdown', () => {
             this.scale.off('resize', this.handleResize, this);
             if (this.wanderTimer) this.wanderTimer.remove();
+            this.sky?.destroy();
         });
 
         gameState.player = this.player;
@@ -61,10 +69,56 @@ class WorldScene extends Phaser.Scene {
         if (this.map.kind === 'town') gameState.lastTownId = this.map.id;
 
         audioManager.playZoneMusic(this.map.zone);
+        this.rollWeather();
 
         if (!gameState.saveData) {
             this.uiManager.showMessage('Talk to the townsfolk, then head north.', 3400);
         }
+    }
+
+    // --- sky ----------------------------------------------------------------
+
+    // Each map gets its own weather when you walk in, and it turns over every
+    // so often while you are there.
+    rollWeather(announce = false) {
+        const before = gameState.weather;
+        gameState.weather = rollWeather(this.map.zone, gameState.clock.isNight);
+        this.weatherTimer = 0;
+
+        this.applySky();
+        this.uiManager.refreshHud();
+
+        if (announce && gameState.weather !== before && gameState.weather !== 'clear') {
+            this.uiManager.showMessage(getWeather(gameState.weather).blurb, 2400);
+        }
+    }
+
+    applySky() {
+        this.sky?.apply(gameState.clock.phase, gameState.weather);
+    }
+
+    // Runs the clock forward and reacts when the hour or the sky turns over
+    advanceTime(delta) {
+        const phaseChanged = gameState.clock.advance(delta);
+        this.uiManager.updateSky();
+
+        this.weatherTimer += delta;
+        if (this.weatherTimer >= WorldScene.WEATHER_MS) {
+            this.rollWeather(true);
+            return;
+        }
+
+        if (!phaseChanged) return;
+
+        const phase = gameState.clock.phase;
+        this.applySky();
+        this.uiManager.refreshHud();
+        this.uiManager.showMessage(
+            phase.id === 'night'
+                ? `${phase.icon} ${phase.label} - other monsters are out now.`
+                : `${phase.icon} ${phase.label}`,
+            2600
+        );
     }
 
     restoreSave() {
@@ -77,6 +131,14 @@ class WorldScene extends Phaser.Scene {
             const spawn = this.map.getDefaultSpawn();
             this.player.sprite.setPosition(spawn.x, spawn.y);
         }
+    }
+
+    // A fusion's sprite is painted when it is created, which is no help to a
+    // team loaded back off disk - paint any that are missing.
+    rebuildFusionSprites() {
+        this.player.getAllMonsters()
+            .filter(monster => monster.isFused)
+            .forEach(monster => SpriteFactory.buildFusion(this, monster));
     }
 
     // --- map handling -------------------------------------------------------
@@ -236,6 +298,7 @@ class WorldScene extends Phaser.Scene {
         if (this.map.kind === 'town') gameState.lastTownId = this.map.id;
 
         audioManager.playZoneMusic(this.map.zone);
+        this.rollWeather();
         this.uiManager.refreshHud();
         this.uiManager.showMessage(this.map.name, 1800);
 
@@ -267,6 +330,7 @@ class WorldScene extends Phaser.Scene {
     handleResize() {
         this.cameras.main.setZoom(this.getCameraZoom());
         this.minimap.resizeToContainer();
+        this.sky?.resize();
     }
 
     // --- input --------------------------------------------------------------
@@ -292,6 +356,8 @@ class WorldScene extends Phaser.Scene {
         this.events.on('encounter-start', (data) => {
             this.startWildBattle(data.wildMonster);
         });
+
+        this.events.on('route-event', (data) => this.runRouteEvent(data.event));
 
         this.events.on('battle-action', (data) => {
             if (this.battleSystem?.isActive()) {
@@ -349,6 +415,7 @@ class WorldScene extends Phaser.Scene {
         this.uiManager.showDialogue(npc.trainer ? npc.trainer.title : null, lines, () => {
             if (npc.role === 'heal') this.healTeam();
             if (npc.role === 'shop') this.uiManager.openShop();
+            if (npc.role === 'fuse') this.uiManager.openFusion();
             if (npc.role === 'gift' && !alreadyGifted) this.giveGift(npc, giftKey);
         });
     }
@@ -377,6 +444,118 @@ class WorldScene extends Phaser.Scene {
         this.uiManager.showMessage('Your team is fully healed!', 1800);
         audioManager.playSfx('heal');
         saveGame();
+    }
+
+    // --- route events -------------------------------------------------------
+
+    // Something in the grass that is not a fight. Conditions live in
+    // RouteEvents.js; what actually happens lives here, where the world is.
+    runRouteEvent(event) {
+        this.player.stopMoving();
+        touchControls.reset();
+        audioManager.playSfx('shop');
+
+        if (!gameState.eventsSeen.includes(event.id)) gameState.eventsSeen.push(event.id);
+
+        if (event.choice) {
+            this.uiManager.showChoice(event.speaker, event.lines, event.choice,
+                (accepted) => this.resolveRouteEvent(event, accepted));
+            return;
+        }
+
+        this.uiManager.showDialogue(event.speaker, event.lines,
+            () => this.resolveRouteEvent(event, true));
+    }
+
+    resolveRouteEvent(event, accepted) {
+        if (!accepted) {
+            saveGame();
+            return;
+        }
+
+        const handlers = {
+            pedlar: () => this.uiManager.openShop(CONFIG.PEDLAR_STOCK, 'Pedlar'),
+            chest: () => this.openRoadsideChest(),
+            coins: () => this.findCoins(),
+            stray: () => this.adoptStray(),
+            campfire: () => this.restAtCampfire(),
+            'falling-star': () => this.wishOnStar(),
+            sheltered: () => this.acceptSupplies()
+        };
+
+        (handlers[event.id] || (() => {}))();
+        saveGame();
+    }
+
+    // Two in five chests are not chests
+    openRoadsideChest() {
+        if (Math.random() < 0.4) {
+            this.uiManager.showMessage('The lid opens on its own. Teeth.', 2200);
+
+            const level = this.map.getWildLevel() + 3;
+            const ambusher = createWildMonster(this.map.zone, level, gameState.clock.isNight);
+
+            this.time.delayedCall(1100, () => this.startWildBattle(ambusher));
+            return;
+        }
+
+        const prize = randomFrom(['Super Potion', 'Super Ball', 'Full Potion', 'Antidote', 'Ultra Ball']);
+        this.player.getInventory().addItem(prize, 1);
+
+        audioManager.playSfx('caught');
+        this.uiManager.showMessage(`The chest held ${withArticle(prize)}!`, 2600);
+    }
+
+    findCoins() {
+        const found = randomInt(30, 90);
+        this.player.addCoins(found);
+
+        audioManager.playSfx('buy');
+        this.uiManager.refreshHud();
+        this.uiManager.showMessage(`You dug out ${found} coins.`, 2400);
+    }
+
+    // A wild monster that would rather travel with you than fight you
+    adoptStray() {
+        const level = Math.max(2, this.map.getWildLevel() - 1);
+        const stray = createWildMonster(this.map.zone, level, gameState.clock.isNight);
+
+        const result = this.player.catchMonster(stray);
+        if (!result.success) {
+            this.uiManager.showMessage(result.reason, 2400);
+            return;
+        }
+
+        // It came along willingly, so it starts out already fond of you
+        stray.addBond(30);
+
+        audioManager.playSfx('caught');
+        this.uiManager.refreshHud();
+        this.uiManager.showMessage(`${stray.name} (Lv.${stray.level}) joined you!`, 3200);
+        this.uiManager.checkDexCompletion();
+    }
+
+    restAtCampfire() {
+        this.player.getAllMonsters().forEach(monster => monster.refillPp());
+
+        audioManager.playSfx('heal');
+        this.uiManager.showMessage('Every move is fully restored.', 2400);
+    }
+
+    wishOnStar() {
+        this.player.healAll();
+        this.player.getAllMonsters().forEach(monster => monster.addBond(8));
+
+        audioManager.playSfx('victory');
+        this.uiManager.refreshHud();
+        this.uiManager.showMessage('Your team is fully healed, and a little closer to you.', 3200);
+    }
+
+    acceptSupplies() {
+        ['Super Potion', 'Antidote'].forEach(item => this.player.getInventory().addItem(item, 1));
+
+        audioManager.playSfx('caught');
+        this.uiManager.showMessage('You were given a Super Potion and an Antidote.', 2800);
     }
 
     // --- battles ------------------------------------------------------------
@@ -449,6 +628,8 @@ class WorldScene extends Phaser.Scene {
 
     update(time, delta) {
         if (!this.player || this.transitioning) return;
+
+        this.advanceTime(delta);
 
         if (Phaser.Input.Keyboard.JustDown(this.interactKeys.space)
             || Phaser.Input.Keyboard.JustDown(this.interactKeys.enter)) {
@@ -602,7 +783,7 @@ class WorldScene extends Phaser.Scene {
         this.map.items = this.map.items.filter(i => i !== pickup);
 
         audioManager.playSfx('caught');
-        this.uiManager.showMessage(`Found a ${pickup.item}!`, 2000);
+        this.uiManager.showMessage(`Found ${withArticle(pickup.item)}!`, 2000);
         saveGame();
     }
 

@@ -128,6 +128,11 @@
         </div>
 
         <div class="test-section">
+            <h2>Time, weather, momentum, bonds and fusion</h2>
+            <div id="systems-tests"></div>
+        </div>
+
+        <div class="test-section">
             <h2>🐛 Known Issues</h2>
             <div id="known-issues"></div>
         </div>
@@ -402,12 +407,24 @@
             runTest('Towns are safe and have a healer and a shop', () => {
                 Object.entries(MAPS).filter(([, def]) => def.kind === 'town').forEach(([id, def]) => {
                     const roles = (def.npcs || []).map(n => n.role);
-                    if (!roles.includes('heal')) throw new Error(`${id} has no healer`);
-                    if (!roles.includes('shop')) throw new Error(`${id} has no shop`);
+
+                    // A `plain` town is a destination rather than a rest stop -
+                    // the shrine hollow deliberately has neither counter.
+                    if (!def.plain) {
+                        if (!roles.includes('heal')) throw new Error(`${id} has no healer`);
+                        if (!roles.includes('shop')) throw new Error(`${id} has no shop`);
+                    }
 
                     const map = new WorldMap(id);
                     const encounterTiles = map.tiles.flat().filter(t => t.encounter);
                     if (encounterTiles.length) throw new Error(`${id} has wild encounters`);
+
+                    // ...and if it says it is plain, the pads must really be gone
+                    if (def.plain) {
+                        const pads = map.tiles.flat()
+                            .filter(t => t.type === 'heal_pad' || t.type === 'shop_pad');
+                        if (pads.length) throw new Error(`${id} is plain but still has a counter`);
+                    }
                 });
                 return true;
             });
@@ -831,6 +848,338 @@
             frame.src = frame.src; // Refresh
         }
 
+        // Time, weather, momentum, bonds and fusion
+        function testSystems() {
+            currentSection = document.getElementById('systems-tests');
+
+            runTest('The clock passes through every phase of the day', () => {
+                const clock = new WorldClock(0);
+                const seen = new Set();
+                for (let i = 0; i < 200; i++) {
+                    clock.advance(WorldClock.DAY_MS / 200);
+                    seen.add(clock.phase.id);
+                }
+                const missing = WorldClock.PHASES.map(p => p.id).filter(id => !seen.has(id));
+                if (missing.length) throw new Error(`never reached: ${missing.join(', ')}`);
+                return true;
+            });
+
+            runTest('Every phase reads back the phase it was skipped to', () => {
+                WorldClock.PHASES.forEach(phase => {
+                    const clock = new WorldClock();
+                    clock.skipTo(phase.id);
+                    if (clock.phase.id !== phase.id) {
+                        throw new Error(`skipTo(${phase.id}) landed on ${clock.phase.id}`);
+                    }
+                });
+                return true;
+            });
+
+            runTest('The clock face runs forward through a plausible day', () => {
+                const at = (fraction) => {
+                    const clock = new WorldClock(fraction * WorldClock.DAY_MS);
+                    return clock.timeLabel;
+                };
+                // Dawn should read as morning and night as late evening, or the
+                // hour shown has nothing to do with the phase named beside it.
+                const dawn = parseInt(at(0.001), 10);
+                const night = parseInt(at(0.72), 10);
+                if (dawn < 4 || dawn > 7) return `dawn reads ${at(0.001)}`;
+                if (night < 20 || night > 23) return `night reads ${at(0.72)}`;
+                return true;
+            });
+
+            runTest('A new game starts in daylight', () => {
+                const clock = new WorldClock();
+                if (clock.isDark) throw new Error(`a fresh save starts at ${clock.timeLabel}`);
+                return true;
+            });
+
+            runTest('Every zone can roll weather, and towns stay clear', () => {
+                Object.keys(CONFIG.ZONES).forEach(zone => {
+                    for (let i = 0; i < 60; i++) {
+                        const id = rollWeather(zone, i % 2 === 0);
+                        if (!WEATHER[id]) throw new Error(`${zone} rolled unknown weather ${id}`);
+                        if (zone === 'VILLAGE' && id !== 'clear') {
+                            throw new Error(`a town rolled ${id}`);
+                        }
+                    }
+                });
+                return true;
+            });
+
+            runTest('The sun never comes out at night', () => {
+                for (let i = 0; i < 400; i++) {
+                    if (rollWeather('SAND', true) === 'sun') throw new Error('blazing sun after dark');
+                }
+                return true;
+            });
+
+            runTest('Rain and sun push Water and Fire in opposite directions', () => {
+                if (weatherDamageFactor('rain', 'Water') <= 1) throw new Error('rain does not lift Water');
+                if (weatherDamageFactor('rain', 'Fire') >= 1) throw new Error('rain does not damp Fire');
+                if (weatherDamageFactor('sun', 'Fire') <= 1) throw new Error('sun does not lift Fire');
+                if (weatherDamageFactor('sun', 'Water') >= 1) throw new Error('sun does not damp Water');
+                if (weatherDamageFactor('clear', 'Water') !== 1) throw new Error('clear weather is not neutral');
+                return true;
+            });
+
+            runTest('A sandstorm spares rock and grinds everything else', () => {
+                const rocky = new Monster('Golem', 20);
+                const soft = new Monster('Fox', 20);
+                if (weatherChipDamage('sandstorm', rocky) !== 0) throw new Error('Rock took sandstorm damage');
+                if (weatherChipDamage('sandstorm', soft) <= 0) throw new Error('a Fire type shrugged off a sandstorm');
+                if (weatherChipDamage('rain', soft) !== 0) throw new Error('rain dealt chip damage');
+                return true;
+            });
+
+            runTest('Effectiveness stacks across both of a fusion type', () => {
+                if (getEffectivenessAgainst('Water', ['Fire', 'Rock']) !== 4) {
+                    throw new Error('a double weakness did not stack');
+                }
+                if (getEffectivenessAgainst('Water', 'Fire') !== 2) {
+                    throw new Error('a bare type string was not handled');
+                }
+                if (getEffectivenessAgainst('Grass', ['Fire', 'Fire']) >= 1) {
+                    throw new Error('a double resistance did not stack');
+                }
+                return true;
+            });
+
+            runTest('Fusing blends name, types, stats and moves', () => {
+                const fox = new Monster('Fox', 14);
+                const golem = new Monster('Golem', 12);
+                const fused = fuseMonsters(fox, golem);
+
+                if (!fused) throw new Error('fusion refused a legal pair');
+                if (fused.level !== 14) throw new Error(`level ${fused.level}, expected the higher parent`);
+                if (fused.type !== 'Fire' || fused.secondType !== 'Rock') {
+                    throw new Error(`types came out ${fused.typeLabel}`);
+                }
+                if (!fused.moves.length || fused.moves.length > 4) {
+                    throw new Error(`${fused.moves.length} moves`);
+                }
+                // Every move has to come from one of the two parents
+                const parentMoves = new Set([...fox.moves, ...golem.moves]);
+                const invented = fused.moves.filter(m => !parentMoves.has(m));
+                if (invented.length) throw new Error(`invented moves: ${invented.join(', ')}`);
+                if (fused.maxHp <= Math.min(fox.maxHp, golem.maxHp)) {
+                    throw new Error('the fusion is frailer than its weaker parent');
+                }
+                return true;
+            });
+
+            runTest('Fusion refuses what it should refuse', () => {
+                const fox = new Monster('Fox', 10);
+                const legendary = new Monster('Volcanor', 30);
+                const fused = fuseMonsters(fox, new Monster('Rat', 10));
+
+                if (canFuse(fox, fox).ok) throw new Error('fused a monster with itself');
+                if (canFuse(fox, legendary).ok) throw new Error('fused a legendary');
+                if (canFuse(fused, fox).ok) throw new Error('fused an existing fusion');
+                return true;
+            });
+
+            runTest('A fusion survives being saved and loaded', () => {
+                const fused = fuseMonsters(new Monster('Owl', 18), new Monster('Crab', 16));
+                const restored = Monster.fromData(JSON.parse(JSON.stringify(fused.getSaveData())));
+
+                ['name', 'level', 'type', 'secondType', 'maxHp', 'attack', 'defense', 'speed']
+                    .forEach(field => {
+                        if (restored[field] !== fused[field]) {
+                            throw new Error(`${field}: ${restored[field]} != ${fused[field]}`);
+                        }
+                    });
+                if (!restored.isFused) throw new Error('came back as an ordinary monster');
+                if (restored.getSpriteKey() !== fused.getSpriteKey()) throw new Error('lost its sprite');
+                return true;
+            });
+
+            runTest('A fusion never evolves out from under you', () => {
+                const fused = fuseMonsters(new Monster('Slime', 14), new Monster('Rat', 14));
+                const before = fused.name;
+                fused.gainExp(100000);
+                if (fused.name !== before) throw new Error(`turned into ${fused.name}`);
+                return true;
+            });
+
+            runTest('Bonds build to five hearts and stop', () => {
+                const monster = new Monster('Fox', 10);
+                if (monster.bondHearts !== 0) throw new Error('starts with hearts');
+
+                for (let i = 0; i < 40; i++) monster.addBond(24);
+                if (monster.bondHearts !== 5) throw new Error(`ended on ${monster.bondHearts} hearts`);
+                if (monster.bond > Monster.MAX_BOND) throw new Error('bond ran past its cap');
+                if (monster.critChance() <= CONFIG.CRIT_CHANCE) throw new Error('bond did not improve crits');
+                return true;
+            });
+
+            runTest('Only a close monster holds on, and only once', () => {
+                const stranger = new Monster('Fox', 20);
+                stranger.hp = Math.floor(stranger.maxHp / 2);
+                for (let i = 0; i < 200; i++) {
+                    if (stranger.tryHangOn(9999)) throw new Error('a monster with no bond held on');
+                }
+
+                const friend = new Monster('Fox', 20);
+                friend.bond = Monster.MAX_BOND;
+
+                // Never from full health, and never against a survivable hit
+                if (friend.tryHangOn(9999)) throw new Error('held on from full health');
+                friend.hp = Math.floor(friend.maxHp / 2);
+                if (friend.tryHangOn(1)) throw new Error('held on against a harmless hit');
+
+                let held = false;
+                for (let i = 0; i < 200 && !held; i++) {
+                    friend.heldOn = false;
+                    friend.hp = Math.floor(friend.maxHp / 2);
+                    held = friend.tryHangOn(9999);
+                }
+                if (!held) throw new Error('a five-heart monster never held on in 200 tries');
+                if (friend.hp !== 1) throw new Error(`held on at ${friend.hp} HP`);
+                if (friend.tryHangOn(9999)) throw new Error('held on twice in one battle');
+                return true;
+            });
+
+            runTest('Every night roster is real, and the night has its own monsters', () => {
+                Object.entries(CONFIG.ZONES).forEach(([zone, data]) => {
+                    (data.night || []).forEach(name => {
+                        if (!SPECIES[name]) throw new Error(`${zone} lists unknown night monster ${name}`);
+                    });
+                });
+
+                if (!NOCTURNAL.length) throw new Error('no nocturnal species exist');
+
+                // Nothing that only comes out at night may show up in daylight
+                Object.keys(CONFIG.ZONES).forEach(zone => {
+                    for (let i = 0; i < 200; i++) {
+                        const name = getRandomMonsterForZone(zone, false);
+                        if (isNocturnal(name)) throw new Error(`${name} appeared in ${zone} by day`);
+                    }
+                });
+                return true;
+            });
+
+            runTest('Nocturnal species are reachable after dark', () => {
+                const reachable = new Set();
+                Object.keys(CONFIG.ZONES).forEach(zone => {
+                    for (let i = 0; i < 400; i++) reachable.add(getRandomMonsterForZone(zone, true));
+                });
+                // An evolution need not appear in the wild; its base form must
+                const unreachable = NOCTURNAL.filter(name => {
+                    const isEvolution = Object.values(SPECIES).some(s => s.evolvesTo === name);
+                    return !isEvolution && !reachable.has(name);
+                });
+                if (unreachable.length) throw new Error(`never appears: ${unreachable.join(', ')}`);
+                return true;
+            });
+
+            runTest('Every route event can actually fire', () => {
+                const contexts = [
+                    { coins: 500, teamSize: 1, isNight: false, weather: 'clear' },
+                    { coins: 500, teamSize: 1, isNight: true, weather: 'rain' },
+                    { coins: 0, teamSize: CONFIG.MAX_MONSTERS_IN_TEAM, isNight: true, weather: 'fog' }
+                ];
+                const seen = new Set();
+                contexts.forEach(ctx => eligibleRouteEvents(ctx).forEach(e => seen.add(e.id)));
+
+                const never = ROUTE_EVENTS.filter(e => !seen.has(e.id)).map(e => e.id);
+                if (never.length) throw new Error(`unreachable events: ${never.join(', ')}`);
+                return true;
+            });
+
+            runTest('Route events never promise what the player cannot take', () => {
+                // A full team must not be offered a stray, and a broke player
+                // must not be walked into a shop they cannot buy from.
+                const full = { coins: 0, teamSize: CONFIG.MAX_MONSTERS_IN_TEAM, isNight: false, weather: 'clear' };
+                const offered = eligibleRouteEvents(full).map(e => e.id);
+
+                if (offered.includes('stray')) throw new Error('offered a stray to a full team');
+                if (offered.includes('pedlar')) throw new Error('opened a shop for a player with no coins');
+                if (!offered.length) throw new Error('nothing at all can happen to a full, broke team');
+                return true;
+            });
+
+            runTest('Route events always resolve to something', () => {
+                for (let i = 0; i < 300; i++) {
+                    const event = rollRouteEvent({
+                        coins: Math.random() * 400, teamSize: 1 + Math.floor(Math.random() * 6),
+                        isNight: Math.random() < 0.5, weather: Math.random() < 0.5 ? 'clear' : 'rain'
+                    });
+                    if (!event || !event.id || !event.lines?.length) throw new Error('rolled an empty event');
+                }
+                return true;
+            });
+
+            runTest('The pedlar carries only things no town sells', () => {
+                CONFIG.PEDLAR_STOCK.forEach(name => {
+                    const item = CONFIG.ITEMS[name];
+                    if (!item) throw new Error(`the pedlar sells unknown item ${name}`);
+                    if (!item.price) throw new Error(`${name} has no price`);
+                });
+                const rare = Object.entries(CONFIG.ITEMS).filter(([, i]) => i.rare).map(([n]) => n);
+                const unsold = rare.filter(name => !CONFIG.PEDLAR_STOCK.includes(name));
+                if (unsold.length) throw new Error(`no way to buy: ${unsold.join(', ')}`);
+                return true;
+            });
+
+            runTest('Every item can be used or is explicitly for battle', () => {
+                // Guards the crash where the menu called a method that did not
+                // exist: every item type must have a branch in Player.useItem.
+                const handled = ['heal', 'cure', 'ball', 'pp', 'bond'];
+                const unknown = Object.entries(CONFIG.ITEMS)
+                    .filter(([, item]) => !handled.includes(item.type))
+                    .map(([name, item]) => `${name} (${item.type})`);
+                if (unknown.length) throw new Error(`no handler for: ${unknown.join(', ')}`);
+                if (typeof Player.prototype.useItem !== 'function') {
+                    throw new Error('Player.useItem does not exist');
+                }
+                return true;
+            });
+
+            runTest('The shrine hollow is reachable from the region', () => {
+                const reachable = new Set([STARTING_MAP]);
+                const queue = [STARTING_MAP];
+                while (queue.length) {
+                    const id = queue.shift();
+                    (getMapDef(id).exits || []).forEach(exit => {
+                        if (reachable.has(exit.to)) return;
+                        reachable.add(exit.to);
+                        queue.push(exit.to);
+                    });
+                }
+                const stranded = Object.keys(MAPS).filter(id => !reachable.has(id));
+                if (stranded.length) throw new Error(`cannot be walked to: ${stranded.join(', ')}`);
+                return true;
+            });
+
+            runTest('Battle maths runs without a game around it', () => {
+                // The world's clock and weather live on a global the test page
+                // never creates. Reading them through currentClock() and
+                // currentWeather() keeps the rules testable on their own.
+                if (typeof gameState !== 'undefined') return 'a game exists, so this proves nothing';
+                if (currentClock() !== null) throw new Error('currentClock() invented a clock');
+                if (currentWeather() !== 'clear') throw new Error('currentWeather() invented weather');
+
+                const scene = { events: { emit: () => {} }, time: { delayedCall: () => {} } };
+                const battle = new BattleSystem(scene);
+                const result = battle.calculateDamage(new Monster('Fox', 20), new Monster('Owl', 20), getMove('Ember'));
+                if (!(result.damage > 0)) throw new Error('no damage without a running game');
+
+                battle.player = { getInventory: () => null };
+                battle.opponent = { isWild: true, team: [new Monster('Rat', 5)], index: 0 };
+                const chance = battle.catchChance('Monster Ball');
+                if (!(chance > 0 && chance <= 1)) throw new Error(`catch chance came out ${chance}`);
+                return true;
+            });
+
+            runTest('A Burst is worth saving a full gauge for', () => {
+                if (!(CONFIG.BURST_MULTIPLIER > 1)) throw new Error('a Burst does no extra damage');
+                if (!(BattleSystem.MAX_MOMENTUM > 0)) throw new Error('the gauge has no size');
+                return true;
+            });
+        }
+
         function runAllTests() {
             // Reset results
             testResults = { total: 0, passed: 0, failed: 0, warnings: 0, issues: [] };
@@ -844,6 +1193,7 @@
             document.getElementById('inventory-tests').innerHTML = '';
             document.getElementById('ui-tests').innerHTML = '';
             document.getElementById('audio-tests').innerHTML = '';
+            document.getElementById('systems-tests').innerHTML = '';
             document.getElementById('known-issues').innerHTML = '';
             
             // Load game files
@@ -855,6 +1205,10 @@
                 '../js/data/Moves.js',
                 '../js/data/Species.js',
                 '../js/data/Maps.js',
+                '../js/data/Fusion.js',
+                '../js/systems/WorldClock.js',
+                '../js/systems/Weather.js',
+                '../js/systems/RouteEvents.js',
                 '../js/world/TileTextures.js',
                 '../js/world/WorldMap.js',
                 '../js/entities/Monster.js',
@@ -882,6 +1236,7 @@
                     testInventory();
                     testUI();
                     testAudio();
+                    testSystems();
                     checkKnownIssues();
                     return;
                 }

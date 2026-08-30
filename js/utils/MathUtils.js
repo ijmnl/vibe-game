@@ -1,5 +1,5 @@
 /**
- * Small numeric helpers.
+ * Small shared helpers.
  *
  * Game rules (species, levelling, damage, world generation) use these rather
  * than Phaser.Math so the logic stays independent of the rendering library -
@@ -20,4 +20,10 @@ function randomFloat(min, max) {
 
 function randomFrom(list) {
     return list[Math.floor(Math.random() * list.length)];
+}
+
+// "a Potion" but "an Antidote" - item names are shown mid-sentence all over
+// the place, and getting this wrong reads as a bug even though it is not.
+function withArticle(name) {
+    return `${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name}`;
 }

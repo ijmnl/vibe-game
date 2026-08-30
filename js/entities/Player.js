@@ -195,6 +195,73 @@ class Player {
         return true;
     }
 
+    // The monster a healing item should go to: the one furthest from full
+    getMostHurtMonster() {
+        const hurt = this.monsters.filter(monster => monster.hp < monster.maxHp);
+        if (!hurt.length) return null;
+
+        return hurt.reduce((worst, monster) =>
+            monster.hp / monster.maxHp < worst.hp / worst.maxHp ? monster : worst);
+    }
+
+    // Using an item from the overworld menu, where there is no battle to
+    // pick a target from. Healing goes to whoever needs it most.
+    useItem(itemName) {
+        const item = CONFIG.ITEMS[itemName];
+        if (!item || !this.inventory.hasItem(itemName)) {
+            return { success: false, reason: 'You have none of those.' };
+        }
+
+        if (item.type === 'heal') {
+            const monster = this.getMostHurtMonster();
+            if (!monster) return { success: false, reason: 'Nobody needs healing.' };
+
+            const healed = monster.heal(item.value);
+            this.inventory.removeItem(itemName, 1);
+
+            return { success: true, message: `${monster.name} recovered ${healed} HP.` };
+        }
+
+        if (item.type === 'cure') {
+            const monster = this.monsters.find(m => m.status);
+            if (!monster) return { success: false, reason: 'Nobody has a status to cure.' };
+
+            monster.status = null;
+            this.inventory.removeItem(itemName, 1);
+
+            return { success: true, message: `${monster.name} is back to normal.` };
+        }
+
+        if (item.type === 'pp') {
+            const empty = this.monsters.some(m => m.moves.some(move => m.getPp(move) < getMove(move).pp));
+            if (!empty) return { success: false, reason: 'Every move is already full.' };
+
+            this.monsters.forEach(monster => monster.refillPp());
+            this.inventory.removeItem(itemName, 1);
+
+            return { success: true, message: 'Every move is fully restored!' };
+        }
+
+        if (item.type === 'bond') {
+            const monster = this.getCurrentMonster() || this.monsters[0];
+            if (!monster) return { success: false, reason: 'You have no monsters.' };
+            if (monster.bond >= Monster.MAX_BOND) {
+                return { success: false, reason: `${monster.name} could not be closer to you.` };
+            }
+
+            monster.addBond(item.value);
+            this.inventory.removeItem(itemName, 1);
+
+            return { success: true, message: `${monster.name} looks delighted.` };
+        }
+
+        if (item.type === 'ball') {
+            return { success: false, reason: 'Save that for a wild monster.' };
+        }
+
+        return { success: false, reason: 'You cannot use that here.' };
+    }
+
     // --- dex, coins, items --------------------------------------------------
 
     recordSeen(name) {

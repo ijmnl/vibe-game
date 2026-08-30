@@ -37,11 +37,35 @@ class EncounterSystem {
         if (Math.random() < chance) this.triggerEncounter();
     }
 
+    // The context a route event checks itself against
+    eventContext() {
+        return {
+            coins: this.player.coins,
+            teamSize: this.player.getAllMonsters().length,
+            isNight: currentClock()?.isNight === true,
+            weather: currentWeather()
+        };
+    }
+
     triggerEncounter() {
         this.encounterCooldown = CONFIG.ENCOUNTER_COOLDOWN;
+
+        // Not every rustle in the grass is a monster
+        if (Math.random() < ROUTE_EVENT_CHANCE) {
+            const event = rollRouteEvent(this.eventContext());
+            if (event) {
+                this.scene.events.emit('route-event', { event });
+                return;
+            }
+        }
+
         this.encounterActive = true;
 
-        const wildMonster = createWildMonster(this.map.zone, this.map.getWildLevel());
+        // After dark a route turns up a different set of monsters entirely,
+        // and they run a level hotter than their daytime counterparts.
+        const night = currentClock()?.isNight === true;
+        const level = this.map.getWildLevel() + (night ? 1 : 0);
+        const wildMonster = createWildMonster(this.map.zone, level, night);
 
         this.scene.events.emit('encounter-notification', { monster: wildMonster });
 

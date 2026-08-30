@@ -61,14 +61,43 @@ const SPECIES = {
     'Camel':    { dex: 19, type: 'Fire',     stats: { hp: 66, attack: 20, defense: 24, speed: 10 }, exp: 28,
                   moves: [[1, 'Ember'], [1, 'Tackle'], [16, 'Harden'], [22, 'Flame Burst'], [30, 'Body Slam']] },
 
+    // --- Only out after dark ---
+    // Night is worth walking into: these four never appear in daylight, so a
+    // full Monsterdex means coming back to a route you already cleared.
+    //
+    // Moth and Shade share Route 1's night roster, so their base lines sit
+    // beside Bird and Rat rather than above them - a first-time player who
+    // wanders into the grass after dark should find it harder, not hopeless.
+    // Wisp is the tougher one, and never appears anywhere that early.
+    'Moth':     { dex: 20, type: 'Grass',    stats: { hp: 37, attack: 16, defense: 11, speed: 24 }, exp: 18,
+                  nocturnal: true,
+                  moves: [[1, 'Sting'], [1, 'Quick Jab'], [12, 'Spore'], [18, 'Drain Leaf'], [26, 'Leaf Blade']] },
+    'Wisp':     { dex: 21, type: 'Fire',     stats: { hp: 36, attack: 22, defense: 10, speed: 30 }, exp: 22,
+                  nocturnal: true,
+                  moves: [[1, 'Ember'], [1, 'Tackle'], [14, 'Screech'], [20, 'Flame Burst'], [28, 'Inferno']],
+                  evolvesTo: 'Lanturne', evolvesAt: 24 },
+    'Lanturne': { dex: 22, type: 'Fire',     stats: { hp: 62, attack: 36, defense: 20, speed: 40 }, exp: 60,
+                  nocturnal: true,
+                  moves: [[1, 'Flame Burst'], [1, 'Body Slam'], [28, 'Inferno'], [34, 'Focus'], [40, 'Screech']] },
+    'Shade':    { dex: 23, type: 'Normal',   stats: { hp: 45, attack: 19, defense: 13, speed: 20 }, exp: 22,
+                  nocturnal: true,
+                  moves: [[1, 'Scratch'], [1, 'Screech'], [15, 'Venom Bite'], [21, 'Body Slam'], [29, 'Focus']] },
+
     // --- The one legendary, guarded deep in a cave ---
-    'Volcanor': { dex: 20, type: 'Fire',     stats: { hp: 90, attack: 40, defense: 34, speed: 30 }, exp: 200,
+    'Volcanor': { dex: 24, type: 'Fire',     stats: { hp: 90, attack: 40, defense: 34, speed: 30 }, exp: 200,
                   legendary: true,
                   moves: [[1, 'Inferno'], [1, 'Boulder'], [1, 'Focus'], [1, 'Body Slam']] }
 };
 
 const DEX_ORDER = Object.keys(SPECIES).sort((a, b) => SPECIES[a].dex - SPECIES[b].dex);
 const DEX_TOTAL = DEX_ORDER.length;
+
+// Species that only appear once the sun is down
+const NOCTURNAL = DEX_ORDER.filter(name => SPECIES[name].nocturnal);
+
+function isNocturnal(name) {
+    return !!SPECIES[name]?.nocturnal;
+}
 
 function getSpecies(name) {
     return SPECIES[name] || SPECIES['Slime'];

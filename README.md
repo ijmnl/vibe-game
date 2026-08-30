@@ -4,17 +4,35 @@ A Pokémon-inspired HTML5 game built with Phaser.js and modern JavaScript.
 
 ## 🎮 Game Features
 
-- **A region, not one big field**: nine connected maps - three towns and six
-  routes - joined by exits, the way a Pokémon region works. Each is generated
-  from a fixed seed, so a route looks the same every time you walk back in
+- **A region, not one big field**: ten connected maps - three towns, six routes
+  and a shrine hollow - joined by exits, the way a Pokémon region works. Each is
+  generated from a fixed seed, so a route looks the same every time you walk
+  back in
+- **Day and night**: a full day passes in eight minutes. The world darkens, the
+  hour shows in the corner, and four monsters come out that are never seen in
+  daylight
+- **Weather that fights back**: rain lifts Water and drowns Fire, blazing sun
+  does the reverse, a sandstorm grinds down anything that is not made of rock,
+  and in fog everybody misses
+- **Momentum and Burst**: play the matchup well and a gauge fills. Spend it and
+  your next move cannot miss, always crits, and hits far harder
+- **Bonds**: a monster that fights alongside you grows closer. It lands more
+  criticals, and once you are four hearts in it will refuse to go down the first
+  time a hit would finish it
+- **Fusion**: a warden at the Hollow Shrine will take two of your monsters and
+  give back one that is both - a blended name, two types, a mixed base line and
+  the best moves either of them knew. It cannot be undone
+- **The grass is not only monsters**: a pedlar with stock no town carries, a
+  chest that is sometimes not a chest, a campfire, a stray that wants to come
+  along, and after dark, a falling star
 - **Townsfolk and trainers**: 27 NPCs to talk to, 12 of whom will battle you
   with a full team. Trainers spot you down the line they are facing, throw up an
   exclamation and walk over. Beaten trainers stay beaten
 - **A rival** who turns up in each town with a stronger team than last time
 - **Things to find**: 12 items hidden off the paths, remembered once taken
 - **Towns that move**: the locals wander their patch instead of standing frozen
-- **20 monsters to collect**, each with a fixed type, its own pixel art, its own
-  learnset, and several with evolutions
+- **24 monsters to collect**, each with a fixed type, its own pixel art, its own
+  learnset, and several with evolutions - four of them only after dark
 - **Turn-based battles with real choices**: pick from up to four moves, each
   with limited uses, work the type chart, land criticals, inflict burn, poison,
   paralysis and sleep. Speed decides who swings first, and priority moves cut
@@ -29,9 +47,11 @@ A Pokémon-inspired HTML5 game built with Phaser.js and modern JavaScript.
 ## 🗺️ The region
 
 ```
-Sprout Town ──north──> Route 1 ──north──> Greenwood
-                                              │ east
-                                              v
+                                                     Hollow Shrine
+                                                           ^ north
+Sprout Town ──north──> Route 1 ──north──> Greenwood        │
+                                              │ east       │
+                                              v            │
    Ember Cave <──north── Still Shore <──north── Lakeside <──west── Whisper Wood
         │ east
         v
@@ -39,8 +59,12 @@ Sprout Town ──north──> Route 1 ──north──> Greenwood
 ```
 
 Levels climb along the chain: Route 1 sits at 3-5, Whisper Wood at 6-9, and
-Dust Road at 19-24. Talk to the sage in Greenwood before heading into the wood -
-he hands over something that makes the trip a great deal easier.
+Dust Road at 19-24. Wild monsters run a level hotter after dark. Talk to the
+sage in Greenwood before heading into the wood - he hands over something that
+makes the trip a great deal easier.
+
+North out of Whisper Wood is the Hollow Shrine. There is no nurse and no shop
+there; there is one thing, and it is the stone.
 
 ## 📱 Playing on your phone
 
@@ -81,6 +105,10 @@ Phaser is vendored in `vendor/`, so the game also runs offline and from a
    - **Fight** - choose one of your monster's moves. Types matter: Water beats
      Fire and Rock, Grass beats Water and Rock, Fire beats Grass, Electric beats
      Water, Rock beats Fire and Electric. Normal is never resisted
+   - **BURST** - the purple gauge under the health bars fills as you land good
+     hits, and creeps up even while you are taking them. Full, it turns gold:
+     tap it, then pick a move. That move cannot miss, always crits, and hits
+     almost twice as hard
    - **Throw Ball** - the weaker and more status-afflicted the target, the
      better your odds. You cannot catch a trainer's monster
    - **Bag** / **Team** - use an item, or switch monster
@@ -89,7 +117,10 @@ Phaser is vendored in `vendor/`, so the game also runs offline and from a
    free; the shopkeeper sells potions and balls
 6. **Team order**: the ★ in the menu leads the next battle. Use the arrows to
    move a monster up or down
-7. **Menu**: the MENU button, or ESC / M. Team, bag, Monsterdex, sound toggle
+7. **Menu**: the MENU button, or ESC / M. Team, bag, Monsterdex, sound toggle.
+   The row of hearts under each monster is how close it is to you
+8. **The clock**: the corner of the screen shows the hour and the sky. Both
+   change what you meet and how hard your moves land
 
 ### Tips
 
@@ -104,6 +135,16 @@ Phaser is vendored in `vendor/`, so the game also runs offline and from a
 - Trainers give far more EXP and coins than wild monsters
 - Losing costs a fifth of your coins and sends you back to the last town -
   never your monsters or your progress
+- Check the sky before a hard fight. A Fire team in the rain is a Fire team
+  fighting at two thirds strength
+- Night is worth walking into: the monsters are a level higher and four of them
+  cannot be caught at any other time. Take a Night Ball if you meet the pedlar
+- Keeping one monster out builds its bond faster than spreading fights around.
+  Four hearts in, it starts surviving hits that should have finished it
+- A fusion is two of your monsters spent on one. It hits harder and covers more
+  types - and it takes both parents' weaknesses, which can stack to four times
+  damage. Do not fuse two things that share a weakness
+- Not every rustle in the grass is a fight. Some of them are worth stopping for
 
 ## 📁 Project Structure
 
@@ -121,18 +162,23 @@ pokemon-game/
 │   │   ├── Types.js       # The six types and the effectiveness chart
 │   │   ├── Moves.js       # Move definitions and status effects
 │   │   ├── Species.js     # Stats, types, learnsets, evolutions, dex numbers
-│   │   └── Maps.js        # The region: towns, routes, exits, NPCs, trainers
+│   │   ├── Maps.js        # The region: towns, routes, exits, NPCs, trainers
+│   │   └── Fusion.js      # Blending two monsters into one
 │   ├── entities/
 │   │   ├── Player.js      # Player, team, coins, Monsterdex
 │   │   └── Monster.js     # Stats, moves, status, levelling, evolution
 │   ├── systems/
-│   │   ├── BattleSystem.js   # Wild and trainer battles
+│   │   ├── BattleSystem.js   # Wild and trainer battles, momentum and Burst
 │   │   ├── EncounterSystem.js
 │   │   ├── Inventory.js
+│   │   ├── WorldClock.js     # The hour of the day and the phases it passes
+│   │   ├── Weather.js        # What the sky does, and what it does to damage
+│   │   ├── RouteEvents.js    # The things in the grass that are not monsters
 │   │   └── AudioManager.js   # Procedural music and sound effects
 │   ├── world/
 │   │   ├── WorldMap.js       # Builds one town or route from its definition
-│   │   └── TileTextures.js   # Bakes the tileset the world layer draws from
+│   │   ├── TileTextures.js   # Bakes the tileset the world layer draws from
+│   │   └── SkyOverlay.js     # Tint of the hour, plus rain, fog and sand
 │   ├── ui/
 │   │   ├── Minimap.js
 │   │   ├── TouchControls.js  # On-screen D-pad and A button
@@ -171,7 +217,18 @@ checks rather than code checks, and they have each caught real problems:
   clutter could otherwise wall a route off and strand the player
 - map generation is deterministic, so routes do not rearrange behind you
 - every exit leads somewhere and has a matching exit back
-- towns contain no encounter ground and always have a nurse and a shop
+- towns contain no encounter ground and always have a nurse and a shop, unless
+  they are marked `plain` - in which case both counters must really be gone
+- a fusion survives a save and reload with its blended stats, types and sprite
+  intact, and never evolves out from under you
+- only a monster you are close to holds on at 1 HP, never from full health, and
+  never twice in one battle
+- nothing nocturnal ever appears in daylight, and everything nocturnal is
+  reachable at night
+- every route event can fire under some condition, and none is offered to a
+  player who cannot take it - no stray for a full team, no shop for an empty purse
+- every item type has a branch in `Player.useItem` (the menu used to call a
+  method that did not exist, and crashed)
 
 Game rules deliberately avoid `Phaser.Math` (see `js/utils/MathUtils.js`) so the
 data, map and battle logic can be tested without a running game.
@@ -226,6 +283,8 @@ its neighbour. NPC coordinates are relative to the centre of their map.
 
 - There is no way to swap a move out for a different one; the oldest is dropped
 - The rival never travels with you, he only waits in towns
+- A fusion cannot be fused again, and cannot be undone
+- Only the monster that is out earns EXP and bond; the bench learns nothing
 - `js/utils/SpriteGenerator.js` is an older, unused experiment kept for reference
 
 ## 📝 License

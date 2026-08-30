@@ -229,6 +229,10 @@ const SpriteFactory = {
         Scorpion:  ['#c99a3a', '#967024', '#e8c274', '#ffffff'],
         Vulture:   ['#8a6a5a', '#5c453a', '#b89a86', '#e05a4a'],
         Camel:     ['#e0b878', '#ac8a52', '#f5dcae', '#ffffff'],
+        Moth:      ['#a88fd0', '#6f5a96', '#cfbcf0', '#ffe98a'],
+        Wisp:      ['#6ad0ff', '#2f8ab8', '#c4f0ff', '#ffffff'],
+        Lanturne:  ['#ffb43c', '#c07a10', '#ffe08a', '#fff6d0'],
+        Shade:     ['#4a4a68', '#26263a', '#7a7a9c', '#c9c9e4'],
         Volcanor:  ['#ff5a1f', '#8c2500', '#ffa040', '#ffe8a0']
     },
 
@@ -425,6 +429,8 @@ const SpriteFactory = {
         Fish: 'finned',     Crab: 'crustacean',   Turtle: 'shelled',
         Bat: 'winged',      Snake: 'serpent',     Golem: 'boulder',
         Scorpion: 'arachnid', Vulture: 'winged', Camel: 'quadruped',
+        Moth: 'winged',     Wisp: 'blob',
+        Lanturne: 'winged', Shade: 'serpent',
         Volcanor: 'titan'
     },
 
@@ -542,6 +548,39 @@ const SpriteFactory = {
             this.paint(texture.getContext(), shape, 0, 0, palette, scale);
             texture.refresh();
         });
+    },
+
+    // A fused monster has no species entry to draw from, so it is painted at
+    // the moment it is created: the second parent's body, with the first
+    // parent's head and colours over the top half. The join is meant to show.
+    buildFusion(scene, monster) {
+        const key = monster.getSpriteKey();
+        if (!monster.fusion || scene.textures.exists(key)) return key;
+
+        const [headName, bodyName] = monster.fusion.parents;
+        const scale = this.SCALE;
+        const size = this.CELL * scale;
+
+        const paletteFor = (name) => {
+            const colors = this.MONSTER_COLORS[name] || ['#888888', '#555555', '#bbbbbb', '#ffffff'];
+            return { ...this.PALETTE, '1': colors[0], '2': colors[1], '3': colors[2], '4': colors[3] };
+        };
+
+        const shapeFor = (name) => this.SHAPES[this.SPECIES_SHAPE[name] || 'blob'];
+
+        const texture = scene.textures.createCanvas(key, size, size);
+        const ctx = texture.getContext();
+
+        // Whole body from the second parent...
+        this.paint(ctx, shapeFor(bodyName), 0, 0, paletteFor(bodyName), scale);
+
+        // ...then the first parent's top half painted straight over it
+        const head = shapeFor(headName).slice(0, Math.floor(this.CELL * 0.55));
+        this.paint(ctx, head, 0, 0, paletteFor(headName), scale);
+
+        texture.refresh();
+
+        return key;
     },
 
     // Small icons drawn straight onto the world: heal pad, shop sign, etc.

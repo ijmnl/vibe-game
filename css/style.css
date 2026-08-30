@@ -565,8 +565,11 @@ body {
     cursor: not-allowed;
 }
 
+/* The height is a whole number of lines (5 x 16px plus padding). Scrolled to
+   the bottom, an odd height leaves a half-cut line along the top edge, which
+   reads as a rendering fault rather than as more text above. */
 .battle-log {
-    height: 96px;
+    height: 100px;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-y;
@@ -574,7 +577,7 @@ body {
     border-radius: 8px;
     padding: 10px;
     font-size: 9px;
-    line-height: 1.8;
+    line-height: 16px;
 }
 
 .battle-items {
@@ -605,8 +608,8 @@ body {
     border-radius: 3px;
 }
 
-/* Menu, shop and dex overlays */
-#menu-ui, #shop-ui, #dex-ui {
+/* Menu, shop, dex and shrine overlays */
+#menu-ui, #shop-ui, #dex-ui, #fusion-ui {
     position: absolute;
     inset: 0;
     background: rgba(0, 0, 0, 0.9);
@@ -724,12 +727,14 @@ body {
     100% { transform: translate(-50%, 0) scale(1); }
 }
 
+/* Sits just under the HUD rather than across the middle of the screen: at
+   35% it landed on top of whatever panel happened to be open. */
 .game-message {
     position: fixed;
-    top: 35%;
+    top: calc(70px + var(--safe-top));
     left: 50%;
-    transform: translate(-50%, -50%);
-    max-width: calc(100% - 40px);
+    transform: translateX(-50%);
+    max-width: min(76%, 420px);
     text-align: center;
     background: rgba(0, 0, 0, 0.88);
     border: 2px solid var(--accent);
@@ -861,9 +866,17 @@ body {
         grid-template-columns: repeat(3, 1fr);
     }
 
+    /* Two whole lines, on the same reasoning as the portrait height above */
     .battle-log {
-        height: 46px;
+        height: 52px;
     }
+
+    /* The momentum row costs vertical space the short screen does not have,
+       so tighten everything a notch rather than pushing Run off the panel. */
+    .battle-panel { gap: 8px; padding: 10px; }
+    .momentum-row { margin: 0; }
+    .momentum-label { display: none; }
+    .burst-btn { padding: 4px 6px; min-height: 24px; }
 
     .monster-list, .item-list, .scroll-list {
         max-height: 96px;
@@ -871,3 +884,126 @@ body {
 
     .scroll-list.tall, .monster-list.tall { max-height: 38vh; }
 }
+
+/* --- momentum and Burst ------------------------------------------------- */
+
+.momentum-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 4px 0 2px;
+}
+
+.momentum-label { font-size: 7px; letter-spacing: 1px; }
+
+.momentum-bar {
+    flex: 1;
+    height: 6px;
+    background: #2b2b3a;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.momentum-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #7a4fd0, #b98fff);
+    transition: width 0.3s ease;
+}
+
+/* A full gauge should be impossible to miss out of the corner of your eye */
+.momentum-fill.full {
+    background: linear-gradient(90deg, #f6d02c, #fff0a0);
+    animation: momentum-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes momentum-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+}
+
+.burst-btn {
+    font-family: inherit;
+    font-size: 8px;
+    letter-spacing: 1px;
+    padding: 6px 8px;
+    min-height: 28px;
+    border: none;
+    border-radius: 6px;
+    background: var(--surface);
+    color: #fff;
+    opacity: 0.5;
+}
+
+.burst-btn.ready {
+    background: linear-gradient(180deg, #ffd24a, #e0a000);
+    color: #1a1a2e;
+    opacity: 1;
+    box-shadow: 0 0 10px rgba(255, 204, 0, 0.55);
+}
+
+.burst-btn.armed {
+    background: linear-gradient(180deg, #b98fff, #7a4fd0);
+    color: #fff;
+    opacity: 1;
+}
+
+/* --- bond hearts --------------------------------------------------------- */
+
+.bond-row {
+    display: flex;
+    gap: 2px;
+    margin-top: 3px;
+}
+
+.heart {
+    font-size: 9px;
+    color: #3a3a4e;
+    line-height: 1;
+}
+
+.heart.filled { color: #ff6b8a; }
+
+/* --- a dialogue that asks something -------------------------------------- */
+
+.dialogue-choices {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.dialogue-choices .battle-btn { flex: 1; }
+
+/* --- the fusion shrine --------------------------------------------------- */
+
+.fusion-hint {
+    font-size: 8px;
+    line-height: 1.6;
+    opacity: 0.75;
+    margin: 0 0 8px;
+}
+
+.monster-row.selectable {
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+    border: none;
+    cursor: pointer;
+}
+
+.monster-row.selectable:disabled { opacity: 0.4; }
+
+.monster-row.picked { outline: 2px solid #b98fff; }
+
+.fusion-preview {
+    background: var(--panel-soft);
+    border-radius: 8px;
+    padding: 10px;
+    margin: 8px 0;
+    line-height: 1.7;
+}
+
+.fusion-name { font-size: 11px; color: var(--accent); }
+.fusion-types { font-size: 8px; color: #b98fff; margin-top: 2px; }
+.fusion-stats, .fusion-moves { font-size: 7px; margin-top: 4px; }
+.fusion-cost { font-size: 8px; color: var(--accent); margin-top: 6px; }

@@ -13,6 +13,11 @@ class Monster {
 
         const species = getSpecies(name);
         this.type = species.type;
+        // A second type only exists on fused monsters; everything reads types
+        // through getTypes() so one code path covers both.
+        this.secondType = null;
+        this.fusion = null;
+        this.baseStats = { ...species.stats };
         this.legendary = !!species.legendary;
 
         this.recalculateStats();
@@ -23,14 +28,32 @@ class Monster {
         this.pp = {};
         this.refillPp();
 
+        // How closely this monster is tied to the player. Built by fighting
+        // alongside them; spent on nothing, it simply makes them better.
+        this.bond = 0;
+
         // Battle state, reset when a battle ends
         this.status = null;
         this.statusTurns = 0;
         this.stages = { attack: 0, defense: 0 };
+        this.heldOn = false;
     }
 
     get species() {
         return getSpecies(this.name);
+    }
+
+    // Every type this monster defends with. Fusions carry two.
+    getTypes() {
+        return this.secondType ? [this.type, this.secondType] : [this.type];
+    }
+
+    get typeLabel() {
+        return this.getTypes().join('/');
+    }
+
+    get isFused() {
+        return !!this.fusion;
     }
 
     get expToLevel() {
@@ -38,16 +61,17 @@ class Monster {
     }
 
     getSpriteKey() {
-        return `monster-${this.name}`;
+        return this.fusion ? `fusion-${this.fusion.parents.join('-')}` : `monster-${this.name}`;
     }
 
     getColor() {
         return TYPE_COLORS[this.type] ?? 0xcccccc;
     }
 
-    // Stats grow with level from the species base line
+    // Stats grow with level from the species base line. A fusion carries its
+    // own blended base line instead, since it has no species entry.
     recalculateStats() {
-        const base = this.species.stats;
+        const base = this.baseStats || this.species.stats;
 
         this.maxHp = Math.floor(base.hp * (1 + this.level * 0.09)) + this.level * 2;
         this.attack = Math.floor(base.attack * (1 + this.level * 0.07));
@@ -80,6 +104,7 @@ class Monster {
         this.status = null;
         this.statusTurns = 0;
         this.stages = { attack: 0, defense: 0 };
+        this.heldOn = false;
     }
 
     takeDamage(amount) {
@@ -152,6 +177,45 @@ class Monster {
         return `${this.name} is hurt by its ${label}! (-${damage})`;
     }
 
+    // --- bond ---------------------------------------------------------------
+
+    // Five hearts, filled as the bond grows. Purely how it is displayed.
+    static BOND_PER_HEART = 24;
+    static MAX_BOND = 120;
+
+    get bondHearts() {
+        return clamp(Math.floor(this.bond / Monster.BOND_PER_HEART), 0, 5);
+    }
+
+    addBond(amount) {
+        const before = this.bondHearts;
+        this.bond = clamp(this.bond + amount, 0, Monster.MAX_BOND);
+
+        // Only report the moment a whole heart is gained
+        return this.bondHearts > before ? this.bondHearts : 0;
+    }
+
+    // A close monster lands criticals a little more often
+    critChance() {
+        return CONFIG.CRIT_CHANCE + this.bondHearts * 0.012;
+    }
+
+    // Four hearts or more and it will refuse to go down the first time a hit
+    // would finish it. Once per battle, and never from full health, so it
+    // cannot be farmed by walking into everything.
+    tryHangOn(incomingDamage) {
+        if (this.heldOn || this.bondHearts < 4) return false;
+        if (this.hp >= this.maxHp) return false;
+        if (incomingDamage < this.hp) return false;
+
+        if (Math.random() > 0.35) return false;
+
+        this.heldOn = true;
+        this.hp = 1;
+
+        return true;
+    }
+
     // --- move uses ----------------------------------------------------------
 
     refillPp() {
@@ -201,7 +265,7 @@ class Monster {
         const scored = moves.map(move => {
             if (!move.power) return { move, score: 12 };
 
-            const multiplier = getTypeMultiplier(move.type, target.type);
+            const multiplier = getEffectivenessAgainst(move.type, target.getTypes());
             const stab = move.type === this.type ? 1.5 : 1;
 
             return { move, score: move.power * multiplier * stab * move.accuracy };
@@ -238,7 +302,7 @@ class Monster {
             }
 
             const species = this.species;
-            if (species.evolvesTo && this.level >= species.evolvesAt) {
+            if (!this.fusion && species.evolvesTo && this.level >= species.evolvesAt) {
                 const from = this.name;
                 this.evolveInto(species.evolvesTo);
                 events.push({ kind: 'evolved', from, to: this.name });
@@ -273,15 +337,31 @@ class Monster {
             hp: this.hp,
             exp: this.exp,
             moves: this.moves,
-            pp: this.pp
+            pp: this.pp,
+            bond: this.bond,
+            fusion: this.fusion,
+            secondType: this.secondType,
+            type: this.type,
+            baseStats: this.fusion ? this.baseStats : undefined
         };
     }
 
     static fromData(data) {
         const monster = new Monster(data.name, data.level);
 
+        // A fusion has no species entry, so its own blend has to come back
+        // from the save before stats are worked out again.
+        if (data.fusion) {
+            monster.fusion = data.fusion;
+            monster.type = data.type || monster.type;
+            monster.secondType = data.secondType || null;
+            monster.baseStats = data.baseStats || monster.baseStats;
+            monster.recalculateStats();
+        }
+
         monster.hp = Math.min(data.hp ?? monster.maxHp, monster.maxHp);
         monster.exp = data.exp ?? 0;
+        monster.bond = data.bond ?? 0;
         if (Array.isArray(data.moves) && data.moves.length) {
             monster.moves = data.moves.slice(-4);
             monster.refillPp();
@@ -299,8 +379,8 @@ class Monster {
 }
 
 // Wild monster for a zone, at a level that scales with distance from home
-function createWildMonster(zoneType, level) {
-    const name = getRandomMonsterForZone(zoneType);
+function createWildMonster(zoneType, level, atNight = false) {
+    const name = getRandomMonsterForZone(zoneType, atNight);
 
     return new Monster(name, level, true);
 }

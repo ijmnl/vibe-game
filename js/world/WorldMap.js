@@ -139,8 +139,12 @@ class WorldMap {
         this.stampBuilding(cx - 6, cy - 7, 5, 3);
         this.stampBuilding(cx + 2, cy - 7, 5, 3);
 
-        this.set(cx - 4, cy - 4, 'heal_pad');
-        this.set(cx + 4, cy - 4, 'shop_pad');
+        // A `plain` town has no healer and no shop - the shrine hollow is a
+        // destination, not a rest stop.
+        if (!this.def.plain) {
+            this.set(cx - 4, cy - 4, 'heal_pad');
+            this.set(cx + 4, cy - 4, 'shop_pad');
+        }
 
         // A couple of decorative houses lower down
         this.stampBuilding(cx - 9, cy + 2, 4, 3);

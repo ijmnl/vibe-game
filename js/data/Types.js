@@ -39,3 +39,21 @@ function describeEffectiveness(multiplier) {
     if (multiplier < 1) return "It's not very effective...";
     return null;
 }
+
+// Effectiveness against a monster that may have more than one type. A fused
+// monster carries two, and the multipliers stack: Water into a Fire/Rock
+// hybrid is 2x twice over.
+function getEffectivenessAgainst(attackType, defenderTypes) {
+    const types = Array.isArray(defenderTypes) ? defenderTypes : [defenderTypes];
+
+    return types.reduce((total, type) => total * getTypeMultiplier(attackType, type), 1);
+}
+
+// Wording for a stacked multiplier, which can now reach 4x or drop to 0.36x
+function describeStackedEffectiveness(multiplier) {
+    if (multiplier >= 3.5) return "It's devastating!";
+    if (multiplier >= 2) return "It's super effective!";
+    if (multiplier <= 0.4) return "It barely scratches it...";
+    if (multiplier < 1) return "It's not very effective...";
+    return null;
+}

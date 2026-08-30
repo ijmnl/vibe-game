@@ -415,3 +415,184 @@ met alleen je Slime tegen een Bird: **7%**. Wisselen van monster is dus geen
 luxe maar de bedoeling.
 
 49 tests, 0 gefaald.
+
+---
+
+# 🌙 Ronde 5: dag en nacht, weer, momentum, banden en fusie
+
+Een nieuwe ronde met vijf systemen erbij. Alles opnieuw gemeten op geëmuleerde
+iPhone 13, Pixel 5 en Galaxy S9+.
+
+## Wat erbij is gekomen
+
+| Systeem | Wat het doet |
+|---------|--------------|
+| Dag en nacht | Een volle dag duurt 8 minuten. De wereld kleurt mee, de klok staat in de hoek, en vier soorten komen alleen 's nachts tevoorschijn |
+| Weer | Regen, brandende zon, zandstorm en mist — per kaart, met echte gevolgen voor schade, raakkans en aftakeling |
+| Momentum en Burst | Een balk die vult als je goed speelt. Vol besteed je hem aan één klap die niet mist, altijd kritiek is en 1,8x hard aankomt |
+| Banden | Een monster dat naast je vecht raakt aan je gehecht: meer kritieke treffers, en vanaf vier hartjes weigert het één keer per gevecht om om te vallen |
+| Fusie | De wachter bij het Hollow Shrine smelt twee monsters samen tot één met twee types |
+| Gebeurtenissen onderweg | Niet elk geritsel in het gras is een monster |
+
+## Gemeten, niet gegokt
+
+### De Burst doet wat hij belooft
+
+400 schadeberekeningen per geval, zelfde aanval, zelfde monster:
+
+| | gemiddelde schade |
+|---|---|
+| Gewone treffer | 20 |
+| Burst | 49 (**2,45x**) |
+
+In een echt gevecht door de UI heen: normaal ~20-27 schade, de Burst deed **66**.
+De balk vulde in dat gevecht in 6 beurten; met typevoordeel gaat dat in 3.
+
+### Weer verschuift echt de balans
+
+Bubble (Water) op hetzelfde doelwit, 400 keer per weertype:
+
+| Weer | gemiddelde schade | verhouding |
+|------|---|---|
+| Helder | 20 | 1,00 |
+| Regen | 27 | **1,35** |
+| Zon | 13 | **0,65** |
+
+Een zandstorm doet 6% van de maximale HP per beurt aan alles wat geen Rock is —
+Rock-monsters, en fusies met Rock erin, blijven ongemoeid. Mist kost iedereen
+12 procentpunt raakkans.
+
+### Banden
+
+| Hartjes | kans op kritiek | houdt stand op 1 HP |
+|---|---|---|
+| 0 | 6,25% | nooit |
+| 3 | 9,85% | nooit |
+| 4 | 11,05% | 35% |
+| 5 | 12,25% | 34% |
+
+Nooit vanaf volle gezondheid, nooit tegen een klap die je toch zou overleven, en
+nooit twee keer in hetzelfde gevecht. Gecontroleerd over 2000 pogingen per geval.
+
+### Fusie is de moeite waard — en heeft een prijs
+
+Fox L20 + Golem L20 wordt **Folem**, Fire/Rock, 208 HP / 57 aanval / 50 verdediging.
+Tegen dezelfde tegenstanders, 400 duels per vakje:
+
+| Tegenstander | fusie | Fox alleen | Golem alleen |
+|---|---|---|---|
+| Rattler (Normal) | **56%** | 0% | 45% |
+| Owl (Grass) | **100%** | 100% | 98% |
+| Stormwing (Electric) | **100%** | 0% | 100% |
+| Oozer (Water) | **0%** | 0% | 4% |
+
+Beter dan allebei zijn ouders in drie van de vier gevallen, en kansloos in het
+vierde: Water doet 2x op Fire én 2x op Rock, en dat stapelt tot **4x**. De
+wachter zegt het van tevoren — "het draagt de zwaktes van allebei" — en dat is
+precies de afweging.
+
+## 🐛 Gevonden en opgelost in deze ronde
+
+| # | Probleem | Gevolg |
+|---|----------|--------|
+| 1 | **Nacht op Route 1 was onwinbaar** | Zie hieronder — 6% winkans voor een startteam |
+| 2 | `player.useItem()` bestond niet | Een voorwerp gebruiken vanuit het menu crashte met een TypeError. Al langer stuk, nu pas gevonden |
+| 3 | Het fusiescherm ving geen tikken op | De CSS-regel voor de overlays noemde `#fusion-ui` niet, dus het canvas eronder slikte elke tik. Onbruikbaar op een telefoon |
+| 4 | Fusiesprites verdwenen na herladen | De sprite werd alleen bij het samensmelten getekend; na een herstart had het monster geen textuur meer |
+| 5 | Meldingen stapelden op elkaar | Twee meldingen tegelijk werden letterlijk over elkaar heen gedrukt, midden over een open menu |
+| 6 | "The chest held a Antidote" | Lidwoord klopte niet bij klinkers |
+
+### 1. Nacht op Route 1 was een muur
+
+Shade en Moth waren ontworpen als monsters voor het midden van het spel, maar
+stonden op de nachtlijst van Route 1 — de allereerste route. Gemeten met een
+vers startteam (Slime L6 + Rat L6) tegen één wild monster, 400-500 duels per rij:
+
+| Tegenstander | winkans |
+|---|---|
+| Slime / Rat / Bird L5 (overdag) | 100% |
+| Shade L6 — zoals eerst ontworpen | **5%** |
+| Moth L6 — zoals eerst ontworpen | **6%** |
+
+Shade had op level 6 zo'n 85 HP en 34 aanval, tegen de 59 HP en 24 aanval van
+een Bird: ruwweg het dubbele van alles wat er overdag rondloopt.
+
+Het bleek een scherpe drempel — twee punten aanval erbij of eraf zwaaide de
+winkans 60 punten:
+
+| Shade hp/aanval/verdediging/snelheid | winkans |
+|---|---|
+| 44/18/13/20 | 91% |
+| **45/19/13/20** | **75%** |
+| 46/20/14/21 | 30% |
+| 48/22/15/22 (origineel) | 5% |
+
+Definitief: Shade 45/19/13/20, Moth 37/16/11/24. Daarmee komt de nacht uit op
+**74-90%** tegen de 100% van overdag: merkbaar zwaarder, maar te doen — zeker
+met vier drankjes op zak en de mogelijkheid om te vluchten.
+
+## Balans na afloop
+
+Alles opnieuw gemeten, 400 duels per rij:
+
+| Gevecht | winkans |
+|---|---|
+| Rivaal 1 (vers team) | 89% |
+| Rivaal 1 in de regen | 98% |
+| Rivaal 1 in de mist | 82% |
+| Trainer Mia | 96% |
+| Route 1 overdag | 100% |
+| Route 1 's nachts | 74% |
+| Rivaal 2 | 89% |
+| Rivaal 3 | 92% |
+
+Weer verschuift een gevecht dus met 8 tot 16 procentpunt — genoeg om de lucht
+te controleren voordat je een trainer aanspreekt.
+
+## Prestaties
+
+Zwaarste geval: nacht, regen, buiten op een route met rondlopende NPC's.
+
+| Telefoon | scherm | fps | objecten | regendruppels | tweens |
+|---|---|---|---|---|---|
+| iPhone 13 | 390x664 | 60 | 29 | 22 | 24 |
+| Pixel 5 | 393x727 | 57 | 29 | 22 | 24 |
+| Galaxy S9+ | 320x658 | 60 | 29 | 22 | 24 |
+
+Per weertype op een Pixel 5: helder 56, regen 57, mist 55, zandstorm 58 — binnen
+de ruis van elkaar. Mist en zandstorm gebruikten eerst 9 en 14 grote doorzichtige
+wolken; dat kostte meetbaar frames, dus het zijn er nu 6 en 8.
+
+## Tests
+
+Van 49 naar **73 tests, 0 gefaald**. De nieuwe sectie controleert onder meer:
+
+- de klok komt door elke fase van de dag, en `skipTo` landt op de fase die je vraagt
+- de wijzerplaat loopt logisch: dageraad leest als ochtend, nacht als late avond
+- een nieuw spel begint bij daglicht, niet middenin de nacht
+- geen enkel dorp krijgt weer, en de zon komt nooit op na zonsondergang
+- regen en zon duwen Water en Fire precies tegengesteld
+- een zandstorm slaat Rock over en niets anders
+- typevoordeel stapelt over allebei de types van een fusie
+- een fusie erft alleen aanvallen die een van beide ouders echt kende
+- een fusie overleeft opslaan en herladen mét zijn gemengde waarden en sprite
+- een fusie evolueert nooit ongevraagd weg
+- fuseren weigert zichzelf, een legendarisch monster, en een bestaande fusie
+- alleen een monster waar je een band mee hebt houdt stand, en maar één keer
+- niets nachtelijks verschijnt overdag, en alles nachtelijks is 's nachts bereikbaar
+- elke gebeurtenis onderweg kan ergens afgaan, en geen enkele wordt aangeboden
+  aan iemand die er niets mee kan
+- elk voorwerptype heeft een tak in `Player.useItem` — precies de crash uit
+  punt 2 hierboven
+- een `plain` dorp heeft echt geen genezer of winkel meer op de kaart staan
+- het Hollow Shrine is te belopen vanaf het startdorp
+
+## Doorloop
+
+Vanaf een leeg opslagbestand op een geëmuleerde iPhone 13: praten met de nieuwe
+coach, het rivaalgevecht helemaal door de UI heen uitvechten (gewonnen, +80
+munten, opgeslagen als verslagen), de hele regio doorlopen inclusief het Hollow
+Shrine, twee monsters samensmelten, opslaan en herladen — de fusie kwam terug
+met zijn types, waarden en sprite. Geen enkele consolefout.
+
+73 tests, 0 gefaald.

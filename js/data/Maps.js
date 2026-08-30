@@ -32,7 +32,12 @@ const MAPS = {
                       'Monsters hide in the tall grass. Walk the path if you would rather not fight.',
                       'Every monster has a type. Water puts out Fire, Fire burns Grass, Grass drinks Water.'] },
             { id: 'kid', x: 5, y: 3, sprite: 'npc-kid', wander: 2,
-              lines: ['My big sister trains on Route 1!', 'She has never lost. Not once. Probably.'] }
+              lines: ['My big sister trains on Route 1!', 'She has never lost. Not once. Probably.'] },
+            { id: 'coach', x: 6, y: -1, sprite: 'npc-trainer', facing: 'south', sight: 0,
+              lines: ['Watch the bar under the health in a fight.',
+                      'Hit them where it hurts and it fills. Get hit and it still creeps up.',
+                      'Fill it and you can Burst: it cannot miss and it hits like nothing else.',
+                      'And keep the same monster out. They fight harder for someone they know.'] }
         ]
     },
 
@@ -90,7 +95,8 @@ const MAPS = {
         width: 30, height: 22,
         seed: 1004,
         levels: [6, 9],
-        exits: [{ side: 'west', to: 'greenwood_town' }, { side: 'east', to: 'lakeside_town' }],
+        exits: [{ side: 'west', to: 'greenwood_town' }, { side: 'east', to: 'lakeside_town' },
+                { side: 'north', to: 'hollow_shrine' }],
         items: [{ x: -10, y: 6, item: 'Super Potion' }, { x: 11, y: -7, item: 'Super Ball' }, { x: 0, y: 8, item: 'Antidote' }],
         npcs: [
             { id: 'trainer_bram', x: -4, y: -3, sprite: 'npc-trainer', facing: 'south', sight: 4,
@@ -100,7 +106,37 @@ const MAPS = {
             { id: 'trainer_juno', x: 6, y: 4, sprite: 'npc-trainer', facing: 'west', sight: 4,
               trainer: { title: 'Camper Juno', team: [['Fox', 8], ['Snake', 8]], reward: 110,
                          intro: ['Nothing beats a campfire and a good battle!'],
-                         defeat: ['Ha! Worth every coin.'] } }
+                         defeat: ['Ha! Worth every coin.'] } },
+            { id: 'signpost_keeper', x: -1, y: -7, sprite: 'npc-elder', wander: 1,
+              lines: ['North of here the trees give out and there is a hollow.',
+                      'People take two monsters down there and come back with one.',
+                      'I have never had the nerve.'] }
+        ]
+    },
+
+    hollow_shrine: {
+        name: 'Hollow Shrine',
+        kind: 'town',
+        zone: 'VILLAGE',
+        width: 20, height: 16,
+        seed: 1010,
+        // No healer, no shop: there is one thing here and it is the shrine
+        plain: true,
+        exits: [{ side: 'south', to: 'route_2' }],
+        npcs: [
+            { id: 'warden', x: 0, y: -4, sprite: 'npc-elder', role: 'fuse',
+              lines: ['You found it, then.',
+                      'Two of yours go into the stone. One comes out.',
+                      'It keeps the first one\u2019s nature and the second one\u2019s shape - and it will carry both their weaknesses.',
+                      'Think it through. There is no undoing it.'] },
+            { id: 'stargazer', x: -5, y: 2, sprite: 'npc-kid', wander: 2,
+              lines: ['I sit out here all night, you know.',
+                      'There are monsters that only ever come out in the dark.',
+                      'And if you see a star fall - stop walking. Just watch it.'] },
+            { id: 'weatherwoman', x: 5, y: 2, sprite: 'npc-nurse', wander: 2,
+              lines: ['Rain lifts water and drowns fire. Sun does the reverse.',
+                      'A sandstorm grinds down anything that is not stone.',
+                      'Fog makes fools of us all - everyone misses in fog.'] }
         ]
     },
 

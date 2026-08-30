@@ -54,6 +54,8 @@ class BattleScene extends Phaser.Scene {
 
     createBackground() {
         const zoneColor = CONFIG.ZONES[this.zone]?.color || CONFIG.COLORS.grass;
+        // A battle happens where you were standing, so it should look like it:
+        // night and weather wash over the arena the same way they do the world.
 
         this.background = this.add
             .rectangle(this.scale.width / 2, this.scale.height / 2,
@@ -68,6 +70,32 @@ class BattleScene extends Phaser.Scene {
 
         this.decorations = this.add.container(0, 0);
         this.createBattleDecorations();
+
+        this.createSkyWash();
+    }
+
+    // The tint of the hour and the sky, laid over the arena
+    createSkyWash() {
+        const phase = currentClock()?.phase;
+        const sky = getWeather(currentWeather());
+
+        const layers = [
+            { tint: phase?.tint, strength: phase?.strength || 0 },
+            { tint: sky.tint, strength: sky.strength || 0 }
+        ].filter(layer => layer.tint && layer.strength > 0);
+
+        if (!layers.length) return;
+
+        const lead = layers.reduce((a, b) => (b.strength > a.strength ? b : a));
+        // Lighter than the overworld wash, and sitting below the combatants
+        // (depth 19 and up) rather than over them: the arena should read as
+        // night without the two monsters going grey with it.
+        const strength = Math.min(0.42, layers.reduce((sum, l) => sum + l.strength, 0) * 0.7);
+
+        this.skyWash = this.add
+            .rectangle(this.scale.width / 2, this.scale.height / 2,
+                       this.scale.width, this.scale.height, lead.tint, strength)
+            .setDepth(15);
     }
 
     shade(color, factor) {
@@ -231,6 +259,10 @@ class BattleScene extends Phaser.Scene {
             this.horizon.setSize(this.scale.width, this.scale.height * 0.45);
             this.horizon.setPosition(this.scale.width / 2, this.scale.height);
         }
+        if (this.skyWash) {
+            this.skyWash.setSize(this.scale.width, this.scale.height);
+            this.skyWash.setPosition(this.scale.width / 2, this.scale.height / 2);
+        }
         this.positionMonsters();
     }
 
@@ -246,6 +278,8 @@ class BattleScene extends Phaser.Scene {
             'battle-damage': (data) => this.showDamageFlash(data),
             'battle-opponent-switch': () => this.swapOpponentView(),
             'monster-levelup': (data) => this.showLevelUp(data),
+            'battle-held-on': (data) => this.showHeldOn(data),
+            'battle-bond': () => this.floatText('\u2665', '#ff6b8a'),
             'monster-evolved': (data) => {
                 this.swapPlayerMonsterView();
                 this.showEvolution(data);
@@ -274,6 +308,36 @@ class BattleScene extends Phaser.Scene {
 
     showEvolution({ from }) {
         this.floatText(`${from} evolved!`, '#7fc4ff');
+    }
+
+    // A monster digging in at 1 HP is the single most dramatic thing that
+    // happens in a fight - it should not go by in the log alone.
+    showHeldOn({ isEnemy }) {
+        const view = this.viewFor(isEnemy);
+        if (!view) return;
+
+        audioManager.playSfx('heal');
+
+        const label = this.add.text(view.sprite.x, view.sprite.y - 30, 'HELD ON!', {
+            fontFamily: 'monospace', fontSize: '14px', color: '#ff6b8a',
+            stroke: '#000000', strokeThickness: 4
+        }).setOrigin(0.5, 0.5).setDepth(41);
+
+        this.tweens.add({
+            targets: label,
+            y: label.y - 26,
+            alpha: 0,
+            duration: 1400,
+            ease: 'Quad.easeOut',
+            onComplete: () => label.destroy()
+        });
+
+        this.tweens.add({
+            targets: view.sprite,
+            scale: { from: view.sprite.scale * 1.18, to: view.sprite.scale },
+            duration: 320,
+            ease: 'Back.easeOut'
+        });
     }
 
     // Damage rising off whoever was hit, so a big hit reads as a big hit
@@ -330,11 +394,16 @@ class BattleScene extends Phaser.Scene {
         return isEnemy ? this.enemyView : this.playerView;
     }
 
-    showAttackLunge({ isEnemy }) {
+    showAttackLunge({ isEnemy, burst }) {
         const view = this.viewFor(isEnemy);
         if (!view) return;
 
         audioManager.playSfx('attack');
+
+        if (burst) {
+            this.cameras.main.flash(220, 255, 210, 90);
+            this.floatText('BURST!', '#ffd24a');
+        }
 
         const towards = isEnemy ? 26 : -26;
         this.tweens.add({
