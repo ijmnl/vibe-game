@@ -88,12 +88,13 @@ const CONFIG = {
 
 // Helper function to get random monster for zone
 function getRandomMonsterForZone(zoneType) {
-    const zone = CONFIG.ZONES[zoneType];
-    if (!zone) return null;
-    
-    const monsters = zone.monsters;
-    const randomIndex = Math.floor(Math.random() * monsters.length);
-    return monsters[randomIndex];
+    // Towns have an empty roster; fall back rather than build a nameless
+    // monster out of `undefined` if something ever asks for one.
+    const monsters = CONFIG.ZONES[zoneType]?.monsters?.length
+        ? CONFIG.ZONES[zoneType].monsters
+        : CONFIG.ZONES.GRASS.monsters;
+
+    return randomFrom(monsters);
 }
 
 

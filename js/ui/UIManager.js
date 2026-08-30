@@ -21,6 +21,7 @@ class UIManager {
         this.playerMonsterLevel = document.getElementById('player-monster-level');
         this.playerHealth = document.getElementById('player-health');
         this.playerHp = document.getElementById('player-hp');
+        this.playerExp = document.getElementById('player-exp');
         this.playerStatus = document.getElementById('player-status');
         this.battleLogElement = document.getElementById('battle-log');
 
@@ -85,6 +86,7 @@ class UIManager {
         events.on('battle-turn-change', (data) => this.updateBattleControls(data));
         events.on('battle-log-update', (data) => this.updateBattleLog(data.log));
         events.on('battle-heal', () => this.updateBattleBars());
+        events.on('battle-exp', (data) => this.showExpGain(data));
         events.on('battle-damage', () => this.updateBattleBars());
         events.on('battle-monster-switch', () => this.updateBattleBars());
         events.on('battle-monster-faint', () => this.updateBattleBars());
@@ -181,6 +183,7 @@ class UIManager {
             this.playerHp.textContent = `${mine.hp}/${mine.maxHp}`;
             this.setHealthBar(this.playerHealth, mine);
             this.setStatusChip(this.playerStatus, mine);
+            this.setExpBar(this.playerExp, mine);
         }
     }
 
@@ -192,6 +195,14 @@ class UIManager {
 
         element.classList.toggle('low', percent < 25);
         element.classList.toggle('medium', percent >= 25 && percent < 50);
+    }
+
+    // Progress toward the next level
+    setExpBar(element, monster) {
+        if (!element) return;
+
+        const percent = Math.min(100, (monster.exp / monster.expToLevel) * 100);
+        element.style.width = `${percent}%`;
     }
 
     setStatusChip(element, monster) {
@@ -246,6 +257,15 @@ class UIManager {
         });
 
         if (!interactive) this.showBattlePanel('main');
+    }
+
+    // Flash the bar gold while experience is being added
+    showExpGain() {
+        this.updateBattleBars();
+
+        if (!this.playerExp) return;
+        this.playerExp.classList.add('gained');
+        setTimeout(() => this.playerExp.classList.remove('gained'), 900);
     }
 
     updateBattleLog(log) {
@@ -342,6 +362,7 @@ class UIManager {
             if (index === player.currentMonsterIndex) row.classList.add('active');
 
             const percent = (monster.hp / monster.maxHp) * 100;
+            const expPercent = Math.min(100, (monster.exp / monster.expToLevel) * 100);
 
             row.innerHTML = `
                 <div class="monster-avatar" data-key="${monster.getSpriteKey()}"></div>
@@ -351,7 +372,11 @@ class UIManager {
                         <span class="muted">Lv.${monster.level}</span>
                     </div>
                     <div class="health-bar small"><div class="health-fill" style="width:${percent}%"></div></div>
-                    <div class="monster-sub muted">${monster.type} &middot; ${monster.hp}/${monster.maxHp} HP</div>
+                    <div class="exp-row">
+                        <span class="exp-label muted">EXP</span>
+                        <div class="exp-bar"><div class="exp-fill" style="width:${expPercent}%"></div></div>
+                    </div>
+                    <div class="monster-sub muted">${monster.type} &middot; ${monster.hp}/${monster.maxHp} HP &middot; ${monster.exp}/${monster.expToLevel} to Lv.${monster.level + 1}</div>
                 </div>
             `;
 

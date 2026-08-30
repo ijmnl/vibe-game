@@ -539,10 +539,11 @@ class BattleSystem {
         this.addToLog(`${monster.name} gained ${gained} EXP.`);
 
         const events = monster.gainExp(gained);
+        this.scene.events.emit('battle-exp', { monster, gained });
         for (const event of events) {
             if (event.kind === 'level-up') {
                 this.addToLog(`${monster.name} grew to Lv.${event.level}!`);
-                this.scene.events.emit('monster-levelup', { monster });
+                this.scene.events.emit('monster-levelup', { monster, level: event.level });
             } else if (event.kind === 'move-learned') {
                 this.addToLog(event.forgotten
                     ? `${monster.name} learned ${event.move}, forgetting ${event.forgotten}.`

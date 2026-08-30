@@ -244,14 +244,58 @@ class BattleScene extends Phaser.Scene {
             'battle-monster-switch': () => this.swapPlayerMonsterView(),
             'battle-move-used': (data) => this.showAttackLunge(data),
             'battle-damage': (data) => this.showDamageFlash(data),
-            'monster-evolved': () => this.swapPlayerMonsterView(),
-            'battle-opponent-switch': () => this.swapOpponentView()
+            'battle-opponent-switch': () => this.swapOpponentView(),
+            'monster-levelup': (data) => this.showLevelUp(data),
+            'monster-evolved': (data) => {
+                this.swapPlayerMonsterView();
+                this.showEvolution(data);
+            }
         };
 
         Object.entries(handlers).forEach(([event, handler]) => worldEvents.on(event, handler));
 
         this.events.once('shutdown', () => {
             Object.entries(handlers).forEach(([event, handler]) => worldEvents.off(event, handler));
+        });
+    }
+
+    // Levelling is easy to miss in the log, so say it on screen
+    showLevelUp({ monster, level }) {
+        if (!this.playerView) return;
+
+        // Keep the name label in step with the new level
+        if (monster) {
+            this.playerView.label.setText(`${monster.name}  Lv.${monster.level}`);
+        }
+
+        audioManager.playSfx('victory');
+        this.floatText(`Lv.${level}!`, '#f6d02c');
+    }
+
+    showEvolution({ from }) {
+        this.floatText(`${from} evolved!`, '#7fc4ff');
+    }
+
+    floatText(message, color) {
+        if (!this.playerView) return;
+
+        const label = this.add.text(this.playerView.sprite.x, this.playerView.sprite.y - 26, message, {
+            fontFamily: 'monospace',
+            fontSize: '15px',
+            color,
+            stroke: '#000000',
+            strokeThickness: 4
+        });
+        label.setOrigin(0.5, 0.5);
+        label.setDepth(40);
+
+        this.tweens.add({
+            targets: label,
+            y: label.y - 30,
+            alpha: 0,
+            duration: 1300,
+            ease: 'Quad.easeOut',
+            onComplete: () => label.destroy()
         });
     }
 

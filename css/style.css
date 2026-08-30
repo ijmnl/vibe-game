@@ -290,6 +290,32 @@ body {
     text-align: right;
 }
 
+/* Experience toward the next level, under the player's health */
+.exp-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.exp-label { font-size: 7px; letter-spacing: 1px; }
+
+.exp-bar {
+    flex: 1;
+    height: 5px;
+    background: #2b2b3a;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.exp-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #4a90e2, #7fc4ff);
+    transition: width 0.35s ease;
+}
+
+.exp-fill.gained { background: linear-gradient(90deg, #f6d02c, #ffe98a); }
+
 .status-chip {
     font-size: 8px;
     color: #1a1a2e;
@@ -481,6 +507,8 @@ body {
 }
 
 .monster-sub { font-size: 8px; }
+
+.monster-row .exp-bar { height: 4px; }
 
 .health-bar.small { height: 7px; }
 
