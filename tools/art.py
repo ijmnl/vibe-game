@@ -98,10 +98,11 @@ def eye(grid, x, y, *, tall=3, wide=2, catchlight=True):
             px, py = x + col, y + row
             if 0 <= px < N and 0 <= py < N and grid[py][px] != '.':
                 grid[py][px] = 'e'
-    # Two pixels of catchlight, not one: at the size this is actually seen a
-    # single pixel disappears and the eye reads as a hole.
+    # A catchlight, sized to the eye. Two pixels in a three-wide eye turns it
+    # into a headlight; one pixel in a five-wide eye vanishes.
     if catchlight:
-        for px in (x, x + 1):
+        lit = 2 if wide >= 4 else 1
+        for px in range(x, x + lit):
             if 0 <= px < N and 0 <= y < N and grid[y][px] == 'e':
                 grid[y][px] = 'W'
 
@@ -365,3 +366,26 @@ def vline(x, y0, y1):
 
 def hline(y, x0, x1):
     return [(x, y) for x in range(x0, x1)]
+
+
+def fangs(grid, x, y, width):
+    """A jagged mouth. A smile is fine on a starter; the thing at the end of
+    the game should not be smiling."""
+    for col in range(width):
+        px = x + col
+        if 0 <= px < N and grid[y][px] not in ('.', 'o'):
+            grid[y][px] = 'e'
+    for col in range(0, width, 2):
+        px = x + col
+        if 0 <= px < N and 0 <= y - 1 < N and grid[y - 1][px] not in ('.', 'o'):
+            grid[y - 1][px] = 'W'
+        if 0 <= px < N and 0 <= y + 1 < N and grid[y + 1][px] not in ('.', 'o'):
+            grid[y + 1][px] = 'W'
+
+
+def plates(grid, rows, char='5'):
+    """Segment lines across a shell or a rocky hide."""
+    for (y, x0, x1) in rows:
+        for x in range(x0, x1):
+            if 0 <= x < N and 0 <= y < N and grid[y][x] not in ('.', 'o', 'e', 'W'):
+                grid[y][x] = char

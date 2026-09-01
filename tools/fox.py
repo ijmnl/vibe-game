@@ -36,8 +36,8 @@ FOX_PALE = union(
 
 
 def fox_face(grid):
-    eye(grid, 11, 10, tall=3, wide=3)
-    eye(grid, 18, 10, tall=3, wide=3)
+    eye(grid, 11, 10, tall=3, wide=2)
+    eye(grid, 19, 10, tall=3, wide=2)
     # Nose, then a small muzzle line under it
     for x in range(15, 17):
         if grid[14][x] not in ('.', 'o'):
