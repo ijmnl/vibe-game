@@ -1,337 +1,340 @@
 class Player {
     constructor(scene, x, y) {
         this.scene = scene;
-        this.x = x;
-        this.y = y;
         this.speed = CONFIG.PLAYER_SPEED;
         this.direction = 'down';
         this.isMoving = false;
         this.sprite = null;
-        this.collisionBox = null;
+        this.movingFor = 0;   // ms held in one go, used to break into a run
+
         this.monsters = [];
         this.currentMonsterIndex = 0;
         this.inventory = new Inventory();
-        this.lastEncounterTime = 0;
-        
-        // Create player sprite
-        this.createSprite();
-        
-        // Add starting monsters
-        this.addMonster('Slime', 5);
-        this.addMonster('Rat', 3);
-        
-        // Add starting items
+        this.coins = CONFIG.STARTING_COINS;
+
+        // Monsterdex: which species have been seen and which caught
+        this.seen = new Set();
+        this.caught = new Set();
+
+        this.createSprite(x, y);
+
+        // Starter team, a level clear of Route 1's monsters so the first few
+        // fights are winnable rather than a wall
+        this.addMonster('Slime', 6);
+        this.addMonster('Rat', 6);
+
         CONFIG.STARTING_ITEMS.forEach(item => {
             this.inventory.addItem(item.name, item.quantity);
         });
     }
 
-    createSprite() {
-        // Create a simple rectangle sprite for now
-        // We'll replace this with actual pixel art later
-        this.sprite = this.scene.add.rectangle(
-            this.x, 
-            this.y, 
-            CONFIG.TILE_SIZE, 
-            CONFIG.TILE_SIZE, 
-            CONFIG.COLORS.player
-        );
-        
-        // Create collision box (slightly smaller than sprite)
-        this.collisionBox = this.scene.add.rectangle(
-            this.x, 
-            this.y, 
-            CONFIG.TILE_SIZE * 0.8, 
-            CONFIG.TILE_SIZE * 0.8, 
-            0x00ff00, 
-            0.3
-        );
-        
-        // Center the origin
+    createSprite(x, y) {
+        this.sprite = this.scene.add.sprite(x, y, 'player', 0);
         this.sprite.setOrigin(0.5, 0.5);
-        this.collisionBox.setOrigin(0.5, 0.5);
-        
-        // Set depth so player is above world but below UI
         this.sprite.setDepth(10);
-        this.collisionBox.setDepth(10);
+        this.sprite.play('idle-down');
     }
 
-    update(delta) {
-        // Handle movement
-        if (this.isMoving) {
-            // Movement is handled by the input system
-        }
-        
-        // Check for encounters
-        this.checkEncounters(delta);
-        
-        // Update collision box position
-        this.collisionBox.x = this.sprite.x;
-        this.collisionBox.y = this.sprite.y;
+    update() {
+        // Movement is driven by the scene's input handling; encounters are
+        // rolled by EncounterSystem.
     }
 
-    // Move player in a direction
     move(direction, delta) {
         this.direction = direction;
         this.isMoving = true;
-        
-        const speed = this.speed * delta / 1000; // Convert to per-frame movement
-        
+        this.movingFor += delta;
+
+        // Keep going and you break into a run - a route is a long walk otherwise
+        const running = this.movingFor > CONFIG.RUN_AFTER_MS;
+        const speed = this.speed * (running ? CONFIG.RUN_MULTIPLIER : 1);
+        const step = speed * delta / 1000;
         let newX = this.sprite.x;
         let newY = this.sprite.y;
-        
+
         switch (direction) {
-            case 'up':
-                newY -= speed;
-                break;
-            case 'down':
-                newY += speed;
-                break;
-            case 'left':
-                newX -= speed;
-                break;
-            case 'right':
-                newX += speed;
-                break;
+            case 'up':    newY -= step; break;
+            case 'down':  newY += step; break;
+            case 'left':  newX -= step; break;
+            case 'right': newX += step; break;
         }
-        
-        // Check collision
+
+        this.playAnimation(`walk-${direction}`);
+        this.sprite.anims.timeScale = running ? 1.5 : 1;
+
+        // Slide along walls instead of sticking to them: try the full move,
+        // then each axis on its own.
         if (!this.checkCollision(newX, newY)) {
             this.sprite.x = newX;
             this.sprite.y = newY;
-            return true; // Movement successful
-        }
-        
-        return false; // Movement blocked
-    }
-
-    // Check if new position would cause collision
-    checkCollision(x, y) {
-        const world = this.scene.worldGenerator;
-        
-        // Convert world position to tile coordinates
-        const tileX = Math.floor(x / CONFIG.TILE_SIZE);
-        const tileY = Math.floor(y / CONFIG.TILE_SIZE);
-        
-        // Check if out of bounds
-        if (tileX < 0 || tileX >= world.worldWidth || tileY < 0 || tileY >= world.worldHeight) {
             return true;
         }
-        
-        // Check collision map
-        return world.isCollidable(tileX, tileY);
+        if (!this.checkCollision(newX, this.sprite.y)) {
+            this.sprite.x = newX;
+            return true;
+        }
+        if (!this.checkCollision(this.sprite.x, newY)) {
+            this.sprite.y = newY;
+            return true;
+        }
+
+        return false;
     }
 
-    // Check for random encounters
-    checkEncounters(delta) {
-        const now = this.scene.time.now;
-        
-        // Check cooldown
-        if (now - this.lastEncounterTime < CONFIG.ENCOUNTER_COOLDOWN) {
-            return;
-        }
-        
-        // Get current tile
-        const tileX = Math.floor(this.sprite.x / CONFIG.TILE_SIZE);
-        const tileY = Math.floor(this.sprite.y / CONFIG.TILE_SIZE);
-        const tile = this.scene.worldGenerator.getTileAt(tileX, tileY);
-        
-        if (!tile) return;
-        
-        // Only trigger encounters in certain zones
-        const zone = CONFIG.ZONES[tile.zone];
-        if (!zone || !zone.encounterRate) return;
-        
-        // Check if moving
-        if (!this.isMoving) return;
-        
-        // Random chance for encounter
-        if (Math.random() < zone.encounterRate) {
-            this.lastEncounterTime = now;
-            this.isMoving = false;
-            
-            // Trigger encounter
-            this.scene.events.emit('encounter-start', {
-                player: this,
-                zone: tile.zone
-            });
+    playAnimation(key) {
+        if (this.sprite.anims.currentAnim?.key !== key) {
+            this.sprite.play(key, true);
         }
     }
 
-    // Stop moving
+    // The player's feet are what collide, not the whole 32px sprite
+    checkCollision(x, y) {
+        const world = this.scene.map;
+        const half = CONFIG.TILE_SIZE * 0.28;
+        const footY = y + CONFIG.TILE_SIZE * 0.25;
+
+        const corners = [
+            [x - half, footY - half],
+            [x + half, footY - half],
+            [x - half, footY + half],
+            [x + half, footY + half]
+        ];
+
+        return corners.some(([cornerX, cornerY]) => world.isCollidable(
+            Math.floor(cornerX / CONFIG.TILE_SIZE),
+            Math.floor(cornerY / CONFIG.TILE_SIZE)
+        ));
+    }
+
     stopMoving() {
         this.isMoving = false;
+        this.movingFor = 0;
+        this.sprite.anims.timeScale = 1;
+        this.playAnimation(`idle-${this.direction}`);
     }
 
-    // Add a monster to player's team
+    isRunning() {
+        return this.isMoving && this.movingFor > CONFIG.RUN_AFTER_MS;
+    }
+
+    // --- team ---------------------------------------------------------------
+
     addMonster(name, level) {
         if (this.monsters.length >= CONFIG.MAX_MONSTERS_IN_TEAM) {
-            return false; // Team is full
+            return false;
         }
-        
-        const stats = getMonsterStats(name);
-        const monster = {
-            name: name,
-            level: level,
-            maxHp: Math.floor(stats.hp * (1 + level * 0.2)),
-            hp: Math.floor(stats.hp * (1 + level * 0.2)),
-            attack: Math.floor(stats.attack * (1 + level * 0.15)),
-            defense: Math.floor(stats.defense * (1 + level * 0.1)),
-            speed: Math.floor(stats.speed * (1 + level * 0.05)),
-            exp: 0,
-            expToLevel: Math.floor(stats.exp * 1.5),
-            type: this.getRandomType()
-        };
-        
+
+        const monster = new Monster(name, level);
         this.monsters.push(monster);
+        this.recordCaught(monster.name);
+
         return true;
     }
 
-    // Get current monster
     getCurrentMonster() {
         return this.monsters[this.currentMonsterIndex] || null;
     }
 
-    // Switch to next monster
-    nextMonster() {
-        this.currentMonsterIndex = (this.currentMonsterIndex + 1) % this.monsters.length;
-        return this.getCurrentMonster();
+    // First team member that can still fight
+    getFirstHealthyIndex() {
+        return this.monsters.findIndex(monster => monster.isAlive());
     }
 
-    // Get random monster type
-    getRandomType() {
-        const types = CONFIG.MONSTER_TYPES;
-        return types[Math.floor(Math.random() * types.length)];
+    hasHealthyMonster() {
+        return this.monsters.some(monster => monster.isAlive());
     }
 
-    // Get position
-    getPosition() {
-        return {
-            x: this.sprite.x,
-            y: this.sprite.y
-        };
-    }
-
-    // Get zone
-    getZone() {
-        const tileX = Math.floor(this.sprite.x / CONFIG.TILE_SIZE);
-        const tileY = Math.floor(this.sprite.y / CONFIG.TILE_SIZE);
-        const tile = this.scene.worldGenerator.getTileAt(tileX, tileY);
-        return tile ? tile.zone : 'GRASS';
-    }
-
-    // Heal current monster
-    healMonster(amount) {
-        const monster = this.getCurrentMonster();
-        if (monster) {
-            monster.hp = Math.min(monster.hp + amount, monster.maxHp);
-            return true;
-        }
-        return false;
-    }
-
-    // Add EXP to current monster
-    addExp(amount) {
-        const monster = this.getCurrentMonster();
-        if (monster) {
-            monster.exp += amount;
-            
-            // Check for level up
-            if (monster.exp >= monster.expToLevel) {
-                monster.level++;
-                monster.exp -= monster.expToLevel;
-                monster.expToLevel = Math.floor(monster.expToLevel * 1.3);
-                
-                // Increase stats
-                monster.maxHp = Math.floor(monster.maxHp * 1.1);
-                monster.hp = monster.maxHp;
-                monster.attack = Math.floor(monster.attack * 1.1);
-                monster.defense = Math.floor(monster.defense * 1.05);
-                monster.speed = Math.floor(monster.speed * 1.03);
-                
-                this.scene.events.emit('monster-levelup', {
-                    monster: monster,
-                    player: this
-                });
-                
-                return true; // Level up occurred
-            }
-        }
-        return false;
-    }
-
-    // Catch a new monster
-    catchMonster(monsterData) {
-        if (this.monsters.length >= CONFIG.MAX_MONSTERS_IN_TEAM) {
-            return { success: false, reason: 'Team is full' };
-        }
-        
-        // Add the monster to team
-        const newMonster = {
-            name: monsterData.name,
-            level: monsterData.level,
-            maxHp: monsterData.maxHp,
-            hp: Math.floor(monsterData.maxHp * 0.5), // Start with half HP
-            attack: monsterData.attack,
-            defense: monsterData.defense,
-            speed: monsterData.speed,
-            exp: 0,
-            expToLevel: monsterData.expToLevel || Math.floor(getMonsterStats(monsterData.name).exp * 1.5),
-            type: monsterData.type || this.getRandomType()
-        };
-        
-        this.monsters.push(newMonster);
-        
-        return { success: true, monster: newMonster };
-    }
-
-    // Get all monsters
     getAllMonsters() {
         return this.monsters;
     }
 
-    // Remove monster from team
-    removeMonster(index) {
-        if (index >= 0 && index < this.monsters.length) {
-            this.monsters.splice(index, 1);
-            
-            // Adjust current monster index
-            if (this.currentMonsterIndex >= this.monsters.length) {
-                this.currentMonsterIndex = Math.max(0, this.monsters.length - 1);
-            }
-            
-            return true;
-        }
-        return false;
+    healAll() {
+        this.monsters.forEach(monster => monster.fullHeal());
     }
 
-    // Get inventory
+    catchMonster(wild) {
+        this.recordCaught(wild.name);
+
+        if (this.monsters.length >= CONFIG.MAX_MONSTERS_IN_TEAM) {
+            return { success: false, reason: 'Your team is full!' };
+        }
+
+        wild.isWild = false;
+        wild.resetBattleState();
+        this.monsters.push(wild);
+
+        return { success: true, monster: wild };
+    }
+
+    // Move a monster up or down the team order. The first slot is the one
+    // that leads every battle, so this is how you choose your lead.
+    reorderMonster(index, direction) {
+        const target = index + direction;
+
+        if (index < 0 || index >= this.monsters.length) return false;
+        if (target < 0 || target >= this.monsters.length) return false;
+
+        const [moved] = this.monsters.splice(index, 1);
+        this.monsters.splice(target, 0, moved);
+
+        // Keep the highlighted monster pointing at the same creature
+        if (this.currentMonsterIndex === index) this.currentMonsterIndex = target;
+        else if (this.currentMonsterIndex === target) this.currentMonsterIndex = index;
+
+        return true;
+    }
+
+    removeMonster(index) {
+        if (index < 0 || index >= this.monsters.length) return false;
+
+        this.monsters.splice(index, 1);
+        if (this.currentMonsterIndex >= this.monsters.length) {
+            this.currentMonsterIndex = Math.max(0, this.monsters.length - 1);
+        }
+
+        return true;
+    }
+
+    // The monster a healing item should go to: the one furthest from full
+    getMostHurtMonster() {
+        const hurt = this.monsters.filter(monster => monster.hp < monster.maxHp);
+        if (!hurt.length) return null;
+
+        return hurt.reduce((worst, monster) =>
+            monster.hp / monster.maxHp < worst.hp / worst.maxHp ? monster : worst);
+    }
+
+    // Using an item from the overworld menu, where there is no battle to
+    // pick a target from. Healing goes to whoever needs it most.
+    useItem(itemName) {
+        const item = CONFIG.ITEMS[itemName];
+        if (!item || !this.inventory.hasItem(itemName)) {
+            return { success: false, reason: 'You have none of those.' };
+        }
+
+        if (item.type === 'heal') {
+            const monster = this.getMostHurtMonster();
+            if (!monster) return { success: false, reason: 'Nobody needs healing.' };
+
+            const healed = monster.heal(item.value);
+            this.inventory.removeItem(itemName, 1);
+
+            return { success: true, message: `${monster.name} recovered ${healed} HP.` };
+        }
+
+        if (item.type === 'cure') {
+            const monster = this.monsters.find(m => m.status);
+            if (!monster) return { success: false, reason: 'Nobody has a status to cure.' };
+
+            monster.status = null;
+            this.inventory.removeItem(itemName, 1);
+
+            return { success: true, message: `${monster.name} is back to normal.` };
+        }
+
+        if (item.type === 'pp') {
+            const empty = this.monsters.some(m => m.moves.some(move => m.getPp(move) < getMove(move).pp));
+            if (!empty) return { success: false, reason: 'Every move is already full.' };
+
+            this.monsters.forEach(monster => monster.refillPp());
+            this.inventory.removeItem(itemName, 1);
+
+            return { success: true, message: 'Every move is fully restored!' };
+        }
+
+        if (item.type === 'bond') {
+            const monster = this.getCurrentMonster() || this.monsters[0];
+            if (!monster) return { success: false, reason: 'You have no monsters.' };
+            if (monster.bond >= Monster.MAX_BOND) {
+                return { success: false, reason: `${monster.name} could not be closer to you.` };
+            }
+
+            monster.addBond(item.value);
+            this.inventory.removeItem(itemName, 1);
+
+            return { success: true, message: `${monster.name} looks delighted.` };
+        }
+
+        if (item.type === 'ball') {
+            return { success: false, reason: 'Save that for a wild monster.' };
+        }
+
+        return { success: false, reason: 'You cannot use that here.' };
+    }
+
+    // --- dex, coins, items --------------------------------------------------
+
+    recordSeen(name) {
+        this.seen.add(name);
+    }
+
+    recordCaught(name) {
+        this.seen.add(name);
+        this.caught.add(name);
+    }
+
+    addCoins(amount) {
+        this.coins = Math.max(0, this.coins + amount);
+    }
+
+    canAfford(amount) {
+        return this.coins >= amount;
+    }
+
+    getPosition() {
+        return { x: this.sprite.x, y: this.sprite.y };
+    }
+
+    getTile() {
+        return {
+            x: Math.floor(this.sprite.x / CONFIG.TILE_SIZE),
+            y: Math.floor(this.sprite.y / CONFIG.TILE_SIZE)
+        };
+    }
+
+    getZone() {
+        return this.scene.map.zone;
+    }
+
     getInventory() {
         return this.inventory;
     }
 
-    // Use an item
-    useItem(itemName) {
-        return this.inventory.useItem(itemName, this);
-    }
+    // --- saving -------------------------------------------------------------
 
-    // Get player data for saving
     getSaveData() {
         return {
             x: this.sprite.x,
             y: this.sprite.y,
-            monsters: this.monsters,
+            direction: this.direction,
+            coins: this.coins,
+            monsters: this.monsters.map(monster => monster.getSaveData()),
             currentMonsterIndex: this.currentMonsterIndex,
-            inventory: this.inventory.getSaveData()
+            inventory: this.inventory.getSaveData(),
+            seen: [...this.seen],
+            caught: [...this.caught]
         };
     }
 
-    // Load player data
     loadSaveData(data) {
-        this.sprite.x = data.x || this.sprite.x;
-        this.sprite.y = data.y || this.sprite.y;
-        this.monsters = data.monsters || this.monsters;
-        this.currentMonsterIndex = data.currentMonsterIndex || 0;
+        this.sprite.x = data.x ?? this.sprite.x;
+        this.sprite.y = data.y ?? this.sprite.y;
+        this.direction = data.direction || 'down';
+        this.coins = data.coins ?? this.coins;
+
+        if (Array.isArray(data.monsters) && data.monsters.length > 0) {
+            this.monsters = data.monsters.map(monster => Monster.fromData(monster));
+        }
+
+        this.currentMonsterIndex = Math.min(
+            data.currentMonsterIndex || 0,
+            Math.max(0, this.monsters.length - 1)
+        );
+
         this.inventory.loadSaveData(data.inventory || {});
+        this.seen = new Set(data.seen || this.monsters.map(m => m.name));
+        this.caught = new Set(data.caught || this.monsters.map(m => m.name));
+
+        this.playAnimation(`idle-${this.direction}`);
     }
 }

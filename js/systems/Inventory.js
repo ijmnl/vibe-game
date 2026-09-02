@@ -30,6 +30,16 @@ class Inventory {
         return true;
     }
 
+    // Total number of items held, for shop capacity checks
+    getTotalCount() {
+        return Object.values(this.items).reduce((sum, item) => sum + item.quantity, 0);
+    }
+
+    // Items of one kind, e.g. only healing items for the in-battle picker
+    getItemsOfType(type) {
+        return this.getAllItems().filter(item => item.type === type);
+    }
+
     // Use an item
     useItem(itemName, target) {
         if (!this.items[itemName] || this.items[itemName].quantity <= 0) {
@@ -52,9 +62,20 @@ class Inventory {
                 }
                 break;
                 
+            case 'cure': {
+                const monster = target.getCurrentMonster && target.getCurrentMonster();
+                if (!monster || !monster.status) {
+                    return { success: false, reason: 'Nothing to cure' };
+                }
+
+                monster.status = null;
+                this.removeItem(itemName, 1);
+                return { success: true, message: `${monster.name} is back to normal.` };
+            }
+
             case 'ball':
                 // Balls are used in battle, not here
-                return { success: false, reason: 'Cannot use ball outside battle' };
+                return { success: false, reason: 'Cannot use a ball outside battle' };
                 
             default:
                 return { success: false, reason: 'Unknown item type' };

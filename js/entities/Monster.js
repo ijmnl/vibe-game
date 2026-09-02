@@ -1,243 +1,366 @@
+/**
+ * Monster - data, stats and battle state.
+ *
+ * Owns no Phaser display objects: a monster outlives the scene it was created
+ * in (a caught monster travels from BattleScene back to WorldScene), so each
+ * scene draws its own visuals from `getSpriteKey()`.
+ */
 class Monster {
-    constructor(scene, name, level, isWild = false) {
-        this.scene = scene;
+    constructor(name, level, isWild = false) {
         this.name = name;
-        this.level = level || 1;
+        this.level = Math.max(1, level || 1);
         this.isWild = isWild;
-        this.type = this.getRandomType();
-        
-        // Get base stats
-        const stats = getMonsterStats(name);
-        
-        // Calculate stats based on level
-        this.maxHp = Math.floor(stats.hp * (1 + level * 0.2));
+
+        const species = getSpecies(name);
+        this.type = species.type;
+        // A handful of species carry a second type. Everything reads types
+        // through getTypes(), so one code path covers one type or two.
+        this.secondType = species.type2 || null;
+        this.baseStats = { ...species.stats };
+        this.legendary = !!species.legendary;
+
+        this.recalculateStats();
         this.hp = this.maxHp;
-        this.attack = Math.floor(stats.attack * (1 + level * 0.15));
-        this.defense = Math.floor(stats.defense * (1 + level * 0.1));
-        this.speed = Math.floor(stats.speed * (1 + level * 0.05));
-        
-        // Experience
+
         this.exp = 0;
-        this.expToLevel = Math.floor(stats.exp * 1.5);
-        
-        // Battle stats
-        this.status = null; // null, 'burn', 'poison', 'sleep', etc.
+        this.moves = getMovesForLevel(name, this.level);
+        this.pp = {};
+        this.refillPp();
+
+        // How closely this monster is tied to the player. Built by fighting
+        // alongside them; spent on nothing, it simply makes them better.
+        this.bond = 0;
+
+        // Battle state, reset when a battle ends
+        this.status = null;
         this.statusTurns = 0;
-        
-        // Create sprite
-        this.sprite = null;
-        this.createSprite();
-        
-        // Set depth
-        if (this.sprite) {
-            this.sprite.setDepth(20);
-        }
+        this.stages = { attack: 0, defense: 0 };
+        this.heldOn = false;
     }
 
-    createSprite() {
-        // For now, create a colored rectangle based on type
-        // We'll replace this with actual pixel art later
-        const colors = {
-            'Normal': 0xcccccc,
-            'Fire': 0xff4444,
-            'Water': 0x4444ff,
-            'Grass': 0x44ff44,
-            'Electric': 0xffff44,
-            'Rock': 0x888888
-        };
-        
-        const color = colors[this.type] || 0xff00ff;
-        
-        // Create sprite
-        this.sprite = this.scene.add.rectangle(
-            0, 
-            0, 
-            CONFIG.TILE_SIZE * 2, 
-            CONFIG.TILE_SIZE * 2, 
-            color
-        );
-        
-        this.sprite.setOrigin(0.5, 0.5);
-        
-        // Add name text
-        this.nameText = this.scene.add.text(
-            0, 
-            -CONFIG.TILE_SIZE * 1.5,
-            `${this.name} Lv.${this.level}`,
-            {
-                font: '12px Arial',
-                fill: '#ffffff',
-                stroke: '#000000',
-                strokeThickness: 2
-            }
-        );
-        
-        this.nameText.setOrigin(0.5, 0.5);
-        this.nameText.setDepth(25);
+    get species() {
+        return getSpecies(this.name);
     }
 
-    update(delta) {
-        // Update status effects
-        if (this.status) {
-            this.statusTurns--;
-            if (this.statusTurns <= 0) {
-                this.status = null;
-            } else {
-                // Apply status effect
-                this.applyStatusEffect();
-            }
-        }
+    // Every type this monster defends with, and attacks with for STAB
+    getTypes() {
+        return this.secondType ? [this.type, this.secondType] : [this.type];
     }
 
-    getRandomType() {
-        return CONFIG.MONSTER_TYPES[Math.floor(Math.random() * CONFIG.MONSTER_TYPES.length)];
+    get typeLabel() {
+        return this.getTypes().join('/');
     }
 
-    applyStatusEffect() {
-        switch (this.status) {
-            case 'burn':
-                this.hp = Math.max(0, this.hp - Math.floor(this.maxHp * 0.05));
-                break;
-            case 'poison':
-                this.hp = Math.max(0, this.hp - Math.floor(this.maxHp * 0.08));
-                break;
-            case 'sleep':
-                // Can't attack while asleep
-                break;
-        }
+    get expToLevel() {
+        return CONFIG.EXP_BASE + this.level * CONFIG.EXP_PER_LEVEL;
     }
 
-    // Take damage
-    takeDamage(amount, attacker) {
-        // Calculate defense reduction
-        const defenseReduction = Math.floor(amount * (this.defense / (this.defense + 10)));
-        const actualDamage = Math.max(1, amount - defenseReduction);
-        
-        this.hp = Math.max(0, this.hp - actualDamage);
-        
-        return actualDamage;
+    getSpriteKey() {
+        return `monster-${this.name}`;
     }
 
-    // Heal
+    getColor() {
+        return TYPE_COLORS[this.type] ?? 0xcccccc;
+    }
+
+    // Stats grow with level from the species base line
+    recalculateStats() {
+        const base = this.baseStats || this.species.stats;
+
+        this.maxHp = Math.floor(base.hp * (1 + this.level * 0.09)) + this.level * 2;
+        this.attack = Math.floor(base.attack * (1 + this.level * 0.07));
+        this.defense = Math.floor(base.defense * (1 + this.level * 0.06));
+        this.speed = Math.floor(base.speed * (1 + this.level * 0.05));
+    }
+
+    // Attack/defense after any in-battle buffs or drops
+    effectiveStat(which) {
+        const stage = clamp(this.stages[which] || 0, -4, 4);
+        const multiplier = stage >= 0 ? (2 + stage) / 2 : 2 / (2 - stage);
+
+        return Math.max(1, Math.floor(this[which] * multiplier));
+    }
+
+    // Speed decides who moves first; paralysis halves it
+    effectiveSpeed() {
+        return Math.max(1, Math.floor(this.speed * (this.status === 'paralysis' ? 0.5 : 1)));
+    }
+
+    changeStage(which, amount) {
+        const before = this.stages[which] || 0;
+        this.stages[which] = clamp(before + amount, -4, 4);
+
+        return this.stages[which] !== before;
+    }
+
+    // Wipe everything that should not persist outside a battle
+    resetBattleState() {
+        this.status = null;
+        this.statusTurns = 0;
+        this.stages = { attack: 0, defense: 0 };
+        this.heldOn = false;
+    }
+
+    takeDamage(amount) {
+        const damage = Math.max(1, Math.floor(amount));
+        this.hp = Math.max(0, this.hp - damage);
+
+        return damage;
+    }
+
     heal(amount) {
-        this.hp = Math.min(this.maxHp, this.hp + amount);
-        return amount;
+        const before = this.hp;
+        this.hp = Math.min(this.maxHp, this.hp + Math.floor(amount));
+
+        return this.hp - before;
     }
 
-    // Check if monster is alive
+    fullHeal() {
+        this.hp = this.maxHp;
+        this.refillPp();
+        this.resetBattleState();
+    }
+
     isAlive() {
         return this.hp > 0;
     }
 
-    // Check if monster can act (not asleep, etc.)
-    canAct() {
-        return this.isAlive() && this.status !== 'sleep';
-    }
-
-    // Get attack damage
-    getAttackDamage() {
-        return this.attack;
-    }
-
-    // Use a move/attack
-    useAttack(attackType, target) {
-        let damage = this.getAttackDamage();
-        let message = `${this.name} used ${attackType}!`;
-        
-        // Apply type bonuses
-        if (attackType === 'Fire' && target.type === 'Grass') {
-            damage = Math.floor(damage * 1.5);
-            message += ' It\'s super effective!';
-        } else if (attackType === 'Water' && target.type === 'Fire') {
-            damage = Math.floor(damage * 1.5);
-            message += ' It\'s super effective!';
-        } else if (attackType === 'Grass' && target.type === 'Water') {
-            damage = Math.floor(damage * 1.5);
-            message += ' It\'s super effective!';
-        } else if (attackType === 'Electric' && target.type === 'Water') {
-            damage = Math.floor(damage * 1.5);
-            message += ' It\'s super effective!';
-        } else if (attackType === 'Rock' && (target.type === 'Fire' || target.type === 'Electric')) {
-            damage = Math.floor(damage * 1.5);
-            message += ' It\'s super effective!';
+    // Applies a status if the monster does not already have one
+    applyStatus(status) {
+        if (this.status || !STATUS_EFFECTS[status] || !this.isAlive()) {
+            return false;
         }
-        // Not very effective
-        else if ((attackType === 'Fire' && target.type === 'Water') ||
-                 (attackType === 'Water' && target.type === 'Grass') ||
-                 (attackType === 'Grass' && target.type === 'Fire') ||
-                 (attackType === 'Electric' && target.type === 'Grass')) {
-            damage = Math.floor(damage * 0.5);
-            message += ' It\'s not very effective...';
+
+        this.status = status;
+        this.statusTurns = status === 'sleep' ? randomInt(1, 3) : 0;
+
+        return true;
+    }
+
+    // Can this monster act this turn? Returns a reason when it cannot.
+    checkStatusBeforeMove() {
+        if (!this.status) return { canAct: true };
+
+        const effect = STATUS_EFFECTS[this.status];
+
+        if (this.status === 'sleep') {
+            if (this.statusTurns <= 0 || Math.random() < effect.wakeChance) {
+                this.status = null;
+                return { canAct: true, message: `${this.name} woke up!` };
+            }
+            this.statusTurns--;
+            return { canAct: false, message: `${this.name} is fast asleep.` };
         }
-        
-        // Apply damage
-        const actualDamage = target.takeDamage(damage, this);
-        
-        return {
-            damage: actualDamage,
-            message: message
-        };
+
+        if (effect.skipChance && Math.random() < effect.skipChance) {
+            return { canAct: false, message: `${this.name} is paralysed and can't move!` };
+        }
+
+        return { canAct: true };
     }
 
-    // Get random move
-    getRandomAttack() {
-        const types = CONFIG.MONSTER_TYPES;
-        return types[Math.floor(Math.random() * types.length)];
+    // Burn and poison chip away at the end of each turn
+    applyEndOfTurnStatus() {
+        const effect = this.status && STATUS_EFFECTS[this.status];
+        if (!effect || !effect.damagePercent) return null;
+
+        const damage = Math.max(1, Math.floor(this.maxHp * effect.damagePercent));
+        this.hp = Math.max(0, this.hp - damage);
+
+        const label = this.status === 'burn' ? 'burn' : 'poison';
+        return `${this.name} is hurt by its ${label}! (-${damage})`;
     }
 
-    // Get monster data for saving
+    // --- bond ---------------------------------------------------------------
+
+    // Five hearts, filled as the bond grows. Purely how it is displayed.
+    static BOND_PER_HEART = 24;
+    static MAX_BOND = 120;
+
+    get bondHearts() {
+        return clamp(Math.floor(this.bond / Monster.BOND_PER_HEART), 0, 5);
+    }
+
+    addBond(amount) {
+        const before = this.bondHearts;
+        this.bond = clamp(this.bond + amount, 0, Monster.MAX_BOND);
+
+        // Only report the moment a whole heart is gained
+        return this.bondHearts > before ? this.bondHearts : 0;
+    }
+
+    // A close monster lands criticals a little more often
+    critChance() {
+        return CONFIG.CRIT_CHANCE + this.bondHearts * 0.012;
+    }
+
+    // Four hearts or more and it will refuse to go down the first time a hit
+    // would finish it. Once per battle, and never from full health, so it
+    // cannot be farmed by walking into everything.
+    tryHangOn(incomingDamage) {
+        if (this.heldOn || this.bondHearts < 4) return false;
+        if (this.hp >= this.maxHp) return false;
+        if (incomingDamage < this.hp) return false;
+
+        if (Math.random() > 0.35) return false;
+
+        this.heldOn = true;
+        this.hp = 1;
+
+        return true;
+    }
+
+    // --- move uses ----------------------------------------------------------
+
+    refillPp() {
+        this.moves.forEach(name => {
+            this.pp[name] = getMove(name).pp;
+        });
+    }
+
+    getPp(name) {
+        return this.pp[name] ?? getMove(name).pp;
+    }
+
+    hasPp(name) {
+        return this.getPp(name) > 0;
+    }
+
+    spendPp(name) {
+        if (this.pp[name] === undefined) this.pp[name] = getMove(name).pp;
+        if (this.pp[name] > 0) this.pp[name]--;
+    }
+
+    restorePp(name, amount) {
+        const max = getMove(name).pp;
+        this.pp[name] = Math.min(max, (this.pp[name] ?? 0) + amount);
+    }
+
+    // Every move exhausted: fall back to Struggle rather than stalling
+    isOutOfPp() {
+        return this.moves.every(name => !this.hasPp(name));
+    }
+
+    getMoves() {
+        return this.moves.map(getMove);
+    }
+
+    // Only the moves that can actually be used this turn
+    getUsableMoves() {
+        const usable = this.moves.filter(name => this.hasPp(name));
+
+        return usable.length ? usable.map(getMove) : [getMove('Struggle')];
+    }
+
+    // The AI picks the move with the best expected damage, with some slack
+    chooseMove(target) {
+        const moves = this.getUsableMoves();
+
+        const scored = moves.map(move => {
+            if (!move.power) return { move, score: 12 };
+
+            const multiplier = getEffectivenessAgainst(move.type, target.getTypes());
+            const stab = move.type === this.type ? 1.5 : 1;
+
+            return { move, score: move.power * multiplier * stab * move.accuracy };
+        });
+
+        scored.sort((a, b) => b.score - a.score);
+
+        // Mostly the best move, sometimes a random one so fights vary
+        return Math.random() < 0.75
+            ? scored[0].move
+            : scored[randomInt(0, scored.length - 1)].move;
+    }
+
+    // Grant experience. Returns a list of things that happened.
+    gainExp(amount) {
+        const events = [];
+        this.exp += amount;
+
+        while (this.exp >= this.expToLevel && this.level < CONFIG.MAX_LEVEL) {
+            this.exp -= this.expToLevel;
+            this.level++;
+            const hpBefore = this.maxHp;
+            this.recalculateStats();
+            this.hp += this.maxHp - hpBefore; // keep the HP gained from levelling
+            events.push({ kind: 'level-up', level: this.level });
+
+            const learned = getMoveLearnedAt(this.name, this.level);
+            if (learned && !this.moves.includes(learned)) {
+                this.moves.push(learned);
+                this.pp[learned] = getMove(learned).pp;
+                const forgotten = this.moves.length > 4 ? this.moves.shift() : null;
+                if (forgotten) delete this.pp[forgotten];
+                events.push({ kind: 'move-learned', move: learned, forgotten });
+            }
+
+            const species = this.species;
+            if (species.evolvesTo && this.level >= species.evolvesAt) {
+                const from = this.name;
+                this.evolveInto(species.evolvesTo);
+                events.push({ kind: 'evolved', from, to: this.name });
+            }
+        }
+
+        return events;
+    }
+
+    evolveInto(name) {
+        // Evolution can bring new moves; they arrive with full PP below
+        const hpRatio = this.hp / this.maxHp;
+
+        this.name = name;
+        this.type = getSpecies(name).type;
+        this.recalculateStats();
+        this.hp = Math.max(1, Math.round(this.maxHp * hpRatio));
+
+        // Pick up anything the new form should already know
+        const learnset = getMovesForLevel(name, this.level);
+        this.moves = [...new Set([...this.moves, ...learnset])].slice(-4);
+
+        this.moves.forEach(move => {
+            if (this.pp[move] === undefined) this.pp[move] = getMove(move).pp;
+        });
+    }
+
     getSaveData() {
         return {
             name: this.name,
             level: this.level,
-            maxHp: this.maxHp,
             hp: this.hp,
-            attack: this.attack,
-            defense: this.defense,
-            speed: this.speed,
             exp: this.exp,
-            expToLevel: this.expToLevel,
-            type: this.type
+            moves: this.moves,
+            pp: this.pp,
+            bond: this.bond
         };
     }
 
-    // Set position (for battle)
-    setPosition(x, y) {
-        if (this.sprite) {
-            this.sprite.x = x;
-            this.sprite.y = y;
-        }
-        if (this.nameText) {
-            this.nameText.x = x;
-            this.nameText.y = y - CONFIG.TILE_SIZE * 1.5;
-        }
-    }
+    static fromData(data) {
+        const monster = new Monster(data.name, data.level);
 
-    // Show/hide sprite
-    setVisible(visible) {
-        if (this.sprite) {
-            this.sprite.setVisible(visible);
+        monster.hp = Math.min(data.hp ?? monster.maxHp, monster.maxHp);
+        monster.exp = data.exp ?? 0;
+        monster.bond = data.bond ?? 0;
+        if (Array.isArray(data.moves) && data.moves.length) {
+            monster.moves = data.moves.slice(-4);
+            monster.refillPp();
         }
-        if (this.nameText) {
-            this.nameText.setVisible(visible);
-        }
-    }
 
-    // Clean up
-    destroy() {
-        if (this.sprite) {
-            this.sprite.destroy();
+        // Saves from before PP existed simply start full
+        if (data.pp) {
+            monster.moves.forEach(move => {
+                if (typeof data.pp[move] === 'number') monster.pp[move] = data.pp[move];
+            });
         }
-        if (this.nameText) {
-            this.nameText.destroy();
-        }
+
+        return monster;
     }
 }
 
-// Factory function to create a wild monster
-function createWildMonster(scene, zoneType) {
-    const monsterName = getRandomMonsterForZone(zoneType);
-    const level = getRandomWildLevel();
-    
-    return new Monster(scene, monsterName, level, true);
+// Wild monster for a zone, at a level that scales with distance from home
+function createWildMonster(zoneType, level, atNight = false) {
+    const name = getRandomMonsterForZone(zoneType, atNight);
+
+    return new Monster(name, level, true);
 }

@@ -1,9 +1,8 @@
 // Main game initialization
 const gameConfig = {
     type: Phaser.AUTO,
-    width: CONFIG.GAME_WIDTH,
-    height: CONFIG.GAME_HEIGHT,
     parent: 'game-container',
+    backgroundColor: '#1a1a2e',
     scene: [BootScene, WorldScene, BattleScene],
     physics: {
         default: 'arcade',
@@ -17,77 +16,128 @@ const gameConfig = {
         antialias: false
     },
     scale: {
-        mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_BOTH
+        // Fill whatever screen we get instead of letterboxing a fixed 800x600
+        // canvas - on a portrait phone that wasted most of the display.
+        mode: Phaser.Scale.RESIZE,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        width: '100%',
+        height: '100%'
     }
 };
-
-// Initialize AudioManager globally
-const audioManager = new AudioManager();
-
-// Create game instance
-const game = new Phaser.Game(gameConfig);
 
 // Global game state
 const gameState = {
     player: null,
     world: null,
-    saveData: null
+    saveData: null,
+    legendaryDefeated: false,
+    dexCelebrated: false,
+    defeatedTrainers: [],
+    receivedGifts: [],
+    collectedItems: [],
+    lastTownId: STARTING_MAP,
+    // The hour of the day and what the sky is doing, both of which the
+    // battle system reads straight off here
+    clock: new WorldClock(),
+    weather: 'clear',
+    lessonsGiven: 0,
+    eventsSeen: []
 };
+
+const SAVE_KEY = 'pixelMonsterAdventureSave';
 
 // Save game state
 function saveGame() {
     if (!gameState.player) return;
-    
-    const saveData = gameState.player.getSaveData();
-    localStorage.setItem('pixelMonsterAdventureSave', JSON.stringify(saveData));
-    console.log('Game saved!');
+
+    try {
+        localStorage.setItem(SAVE_KEY, JSON.stringify({
+            ...gameState.player.getSaveData(),
+            mapId: gameState.world ? gameState.world.id : STARTING_MAP,
+            legendaryDefeated: gameState.legendaryDefeated,
+            dexCelebrated: gameState.dexCelebrated,
+            defeatedTrainers: gameState.defeatedTrainers,
+            receivedGifts: gameState.receivedGifts,
+            collectedItems: gameState.collectedItems,
+            lastTownId: gameState.lastTownId,
+            clock: gameState.clock.getSaveData(),
+            lessonsGiven: gameState.lessonsGiven,
+            eventsSeen: gameState.eventsSeen
+        }));
+    } catch (e) {
+        // Private browsing on iOS can refuse writes - not worth breaking play over
+        console.warn('Could not save game:', e);
+    }
 }
 
 // Load game state
 function loadGame() {
-    const saveData = localStorage.getItem('pixelMonsterAdventureSave');
-    if (saveData) {
-        try {
-            gameState.saveData = JSON.parse(saveData);
-            console.log('Game loaded!');
-            return gameState.saveData;
-        } catch (e) {
-            console.error('Error loading save:', e);
-            return null;
-        }
+    try {
+        const saveData = localStorage.getItem(SAVE_KEY);
+        if (!saveData) return null;
+
+        gameState.saveData = JSON.parse(saveData);
+        gameState.legendaryDefeated = !!gameState.saveData.legendaryDefeated;
+        gameState.dexCelebrated = !!gameState.saveData.dexCelebrated;
+        gameState.defeatedTrainers = gameState.saveData.defeatedTrainers || [];
+        gameState.receivedGifts = gameState.saveData.receivedGifts || [];
+        gameState.collectedItems = gameState.saveData.collectedItems || [];
+        gameState.lastTownId = gameState.saveData.lastTownId || STARTING_MAP;
+        gameState.clock = new WorldClock(gameState.saveData.clock);
+        gameState.lessonsGiven = gameState.saveData.lessonsGiven || 0;
+        gameState.eventsSeen = gameState.saveData.eventsSeen || [];
+
+        return gameState.saveData;
+    } catch (e) {
+        console.warn('Error loading save:', e);
+        return null;
     }
-    return null;
 }
 
 // Delete save
 function deleteSave() {
-    localStorage.removeItem('pixelMonsterAdventureSave');
+    try {
+        localStorage.removeItem(SAVE_KEY);
+    } catch (e) {
+        console.warn('Could not delete save:', e);
+    }
     gameState.saveData = null;
-    console.log('Save deleted!');
 }
 
-// Auto-save every minute
+// Read any previous session before the world scene builds the player
+loadGame();
+
+// Set up the on-screen controls before the game boots
+touchControls.init();
+
+// Create game instance
+const game = new Phaser.Game(gameConfig);
+
+// Auto-save every minute, and whenever the player leaves the page - phones
+// suspend background tabs, so an interval alone loses progress.
 setInterval(saveGame, 60000);
 
-// Handle window resize
-window.addEventListener('resize', () => {
-    // Update minimap size if needed
-    const minimap = document.getElementById('minimap');
-    if (minimap) {
-        const container = document.getElementById('minimap-container');
-        if (container) {
-            minimap.width = container.clientWidth;
-            minimap.height = container.clientHeight;
-        }
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+        saveGame();
     }
 });
 
-// Initialize game with saved data if available
-window.addEventListener('load', () => {
-    const saveData = loadGame();
-    if (saveData) {
-        // Game will load save data in WorldScene
-        console.log('Loaded save data:', saveData);
+window.addEventListener('pagehide', saveGame);
+
+// Mobile browsers only allow audio to start from a user gesture
+function unlockAudio() {
+    audioManager.resume();
+}
+
+document.addEventListener('pointerdown', unlockAudio, { once: true });
+document.addEventListener('keydown', unlockAudio, { once: true });
+
+// Pause the music while the game is in the background
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+        audioManager.stopMusic();
+    } else {
+        audioManager.resume();
     }
 });

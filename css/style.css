@@ -1,47 +1,75 @@
-body {
+:root {
+    --accent: #ffcc00;
+    --panel: rgba(30, 30, 40, 0.96);
+    --panel-soft: rgba(50, 50, 60, 0.85);
+    --surface: #4a4a6a;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html, body {
     margin: 0;
     padding: 0;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+}
+
+body {
     background-color: #1a1a2e;
     font-family: 'Press Start 2P', 'Courier New', monospace;
-    overflow: hidden;
+    color: #fff;
     user-select: none;
+    -webkit-user-select: none;
+    /* Stop iOS Safari hijacking drags on the d-pad as page scrolls/zooms */
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
 }
 
 #game-container {
-    width: 100vw;
-    height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+#game-container canvas {
+    display: block;
 }
 
 #ui-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    position: fixed;
+    inset: 0;
+    /* Fall back for browsers without dvh, then prefer the dynamic viewport so
+       a collapsing mobile URL bar does not push the controls off screen. */
+    height: 100vh;
+    height: 100dvh;
     pointer-events: none;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    padding: 10px;
-    box-sizing: border-box;
+    padding: calc(10px + var(--safe-top)) calc(10px + var(--safe-right))
+             calc(10px + var(--safe-bottom)) calc(10px + var(--safe-left));
 }
 
 #minimap-container {
     position: absolute;
-    top: 10px;
-    right: 10px;
-    width: 150px;
-    height: 150px;
+    top: calc(10px + var(--safe-top));
+    right: calc(10px + var(--safe-right));
+    width: 120px;
+    height: 120px;
     background: rgba(0, 0, 0, 0.7);
     border: 2px solid #4a4a6a;
     border-radius: 8px;
-    pointer-events: auto;
+    overflow: hidden;
 }
 
 #minimap {
+    display: block;
     width: 100%;
     height: 100%;
     image-rendering: pixelated;
@@ -49,231 +77,674 @@ body {
 
 #player-stats {
     position: absolute;
-    bottom: 10px;
-    left: 10px;
-    color: #fff;
-    background: rgba(0, 0, 0, 0.7);
-    padding: 8px;
-    border-radius: 4px;
-    font-size: 12px;
+    top: calc(10px + var(--safe-top));
+    left: calc(10px + var(--safe-left));
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    background: rgba(0, 0, 0, 0.72);
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 10px;
+    line-height: 1.5;
+}
+
+.muted { opacity: 0.62; }
+
+.coins {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--accent);
+}
+
+/* Touch controls */
+#touch-controls {
+    position: absolute;
+    left: calc(10px + var(--safe-left));
+    right: calc(10px + var(--safe-right));
+    bottom: calc(14px + var(--safe-bottom));
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    pointer-events: none;
+}
+
+#dpad {
+    position: relative;
+    width: 168px;
+    height: 168px;
     pointer-events: auto;
+}
+
+.dpad-btn {
+    position: absolute;
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(74, 74, 106, 0.75);
+    color: #fff;
+    border: 2px solid rgba(255, 204, 0, 0.75);
+    border-radius: 10px;
+    font-size: 18px;
+    line-height: 1;
+    padding: 0;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.dpad-btn.pressed {
+    background: rgba(255, 204, 0, 0.85);
+    color: #1a1a2e;
+}
+
+.dpad-up    { top: 0;    left: 56px; }
+.dpad-left  { top: 56px; left: 0; }
+.dpad-right { top: 56px; left: 112px; }
+.dpad-down  { top: 112px; left: 56px; }
+
+.action-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+    pointer-events: none;
+}
+
+.action-btn {
+    pointer-events: auto;
+    min-width: 66px;
+    min-height: 66px;
+    background: rgba(74, 74, 106, 0.75);
+    color: #fff;
+    border: 2px solid rgba(255, 204, 0, 0.75);
+    border-radius: 50%;
+    font-family: inherit;
+    font-size: 10px;
+    touch-action: none;
+}
+
+.action-btn:active {
+    background: rgba(255, 204, 0, 0.85);
+    color: #1a1a2e;
+}
+
+/* The talk/confirm button gets the accent so it reads as the primary action */
+.action-btn.primary-action {
+    min-width: 72px;
+    min-height: 72px;
+    background: rgba(255, 204, 0, 0.88);
+    color: #1a1a2e;
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.action-btn.primary-action:active {
+    background: rgba(255, 204, 0, 1);
+}
+
+/* Dialogue */
+#dialogue-ui {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    pointer-events: auto;
+    padding: calc(10px + var(--safe-top)) calc(10px + var(--safe-right))
+             calc(10px + var(--safe-bottom)) calc(10px + var(--safe-left));
+    z-index: 900;
+}
+
+.dialogue-box {
+    position: relative;
+    width: 100%;
+    max-width: 600px;
+    min-height: 108px;
+    background: var(--panel);
+    border: 3px solid var(--accent);
+    border-radius: 12px;
+    padding: 14px 16px 26px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#dialogue-speaker {
+    color: var(--accent);
+    font-size: 10px;
+}
+
+#dialogue-text {
+    margin: 0;
+    font-size: 10px;
+    line-height: 1.9;
+}
+
+.dialogue-hint {
+    position: absolute;
+    right: 14px;
+    bottom: 8px;
+    font-size: 8px;
+    opacity: 0.5;
+    animation: blink 1.4s infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 0.2; }
+    50%      { opacity: 0.7; }
 }
 
 /* Battle UI */
 #battle-ui {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.9);
+    inset: 0;
+    /* No dimming veil: the battle scene paints its own backdrop, and a black
+       overlay here washed the monster sprites out. */
+    background: transparent;
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: flex-end;
     pointer-events: auto;
+    padding: calc(10px + var(--safe-top)) calc(10px + var(--safe-right))
+             calc(10px + var(--safe-bottom)) calc(10px + var(--safe-left));
 }
 
 .battle-panel {
-    width: 80%;
+    width: 100%;
     max-width: 600px;
-    background: rgba(30, 30, 40, 0.95);
-    border: 4px solid #ffcc00;
+    max-height: 100%;
+    overflow-y: auto;
+    background: var(--panel);
+    border: 3px solid var(--accent);
     border-radius: 12px;
-    padding: 20px;
+    padding: 14px;
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: 12px;
 }
 
-.battle-panel > * {
-    pointer-events: auto;
-}
-
-.enemy-info, .player-info {
+.combatants {
     display: flex;
-    align-items: center;
-    gap: 15px;
-    padding: 10px;
-    background: rgba(50, 50, 60, 0.8);
+    flex-direction: column;
+    gap: 8px;
+}
+
+.combatant {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+    background: var(--panel-soft);
     border-radius: 8px;
 }
 
-.enemy-sprite, .player-monster-sprite {
-    width: 80px;
-    height: 80px;
-    background: #333;
-    border-radius: 4px;
-    image-rendering: pixelated;
+.combatant.mine {
+    border-left: 3px solid var(--accent);
 }
 
+.hp-readout {
+    font-size: 8px;
+    text-align: right;
+}
+
+/* Experience toward the next level, under the player's health */
+.exp-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.exp-label { font-size: 7px; letter-spacing: 1px; }
+
+.exp-bar {
+    flex: 1;
+    height: 5px;
+    background: #2b2b3a;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.exp-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #4a90e2, #7fc4ff);
+    transition: width 0.35s ease;
+}
+
+.exp-fill.gained { background: linear-gradient(90deg, #f6d02c, #ffe98a); }
+
+.status-chip {
+    font-size: 8px;
+    color: #1a1a2e;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-weight: bold;
+}
+
+.monster-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+}
+
+.monster-meta > :last-child { margin-left: auto; }
+
 .health-bar {
-    width: 200px;
-    height: 20px;
+    width: 100%;
+    height: 12px;
     background: #333;
-    border-radius: 10px;
+    border-radius: 6px;
     overflow: hidden;
 }
 
 .health-fill {
     height: 100%;
     width: 100%;
-    background: linear-gradient(90deg, #ff0000, #ff8888);
-    transition: width 0.3s ease;
-    border-radius: 10px;
+    background: linear-gradient(90deg, #35c94a, #6ee87f);
+    transition: width 0.35s ease;
 }
+
+.health-fill.medium { background: linear-gradient(90deg, #e8a020, #ffc24a); }
+.health-fill.low    { background: linear-gradient(90deg, #d63b2a, #ff6a54); }
 
 .battle-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    gap: 8px;
 }
+
+.battle-btn.wide, .move-btn.wide { grid-column: 1 / -1; }
+
+.battle-btn.primary {
+    background: var(--accent);
+    color: #1a1a2e;
+    font-weight: bold;
+}
+
+.battle-subpanel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.battle-subpanel h3 {
+    margin: 0;
+    font-size: 10px;
+    color: var(--accent);
+}
+
+.move-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.move-btn {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
+    min-height: 52px;
+    padding: 9px 10px;
+    border: 2px solid var(--accent);
+    border-left-width: 6px;
+    border-radius: 8px;
+    background: var(--surface);
+    color: #fff;
+    font-family: inherit;
+    font-size: 9px;
+    text-align: left;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.move-btn:disabled { opacity: 0.45; }
+.move-name { font-size: 9px; line-height: 1.3; }
+.move-meta { font-size: 8px; opacity: 0.65; }
+
+/* Effectiveness marker against whatever is currently out */
+.hint { margin-left: 4px; font-size: 8px; }
+.hint.good { color: #6ee87f; }
+.hint.bad  { color: #ff8a7a; }
+
+/* Move buttons are colour-coded by type so matchups read at a glance */
+.move-btn[data-type="Normal"]   { border-left-color: #b8b8a8; }
+.move-btn[data-type="Fire"]     { border-left-color: #f0603c; }
+.move-btn[data-type="Water"]    { border-left-color: #4a90e2; }
+.move-btn[data-type="Grass"]    { border-left-color: #5cc45c; }
+.move-btn[data-type="Electric"] { border-left-color: #f6d02c; }
+.move-btn[data-type="Rock"]     { border-left-color: #b0a06a; }
+
+.scroll-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 150px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+}
+
+.scroll-list.tall, .monster-list.tall { max-height: 46vh; }
+
+.list-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 8px 11px;
+    background: var(--panel-soft);
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 9px;
+    line-height: 1.55;
+    text-align: left;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.list-row:disabled { opacity: 0.4; }
+.list-row .price { color: var(--accent); white-space: nowrap; }
+
+.panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.panel-head h2 { margin: 0; font-size: 13px; }
+
+.panel-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.panel-actions .battle-btn { flex: 1; }
+
+/* Team and dex rows with a sprite thumbnail */
+.monster-row, .dex-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: var(--panel-soft);
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.monster-row.active { outline: 2px solid var(--accent); }
+.dex-row.unknown { opacity: 0.45; }
+
+.monster-avatar {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 5px;
+}
+
+.monster-avatar canvas {
+    width: 30px;
+    height: 30px;
+    image-rendering: pixelated;
+}
+
+.monster-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+
+.monster-title {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 9px;
+}
+
+.monster-sub { font-size: 8px; }
+
+.monster-row .exp-bar { height: 4px; }
+
+/* Reorder arrows on each team row */
+.reorder {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 0 0 auto;
+}
+
+.reorder-btn {
+    width: 30px;
+    height: 22px;
+    padding: 0;
+    background: var(--surface);
+    color: #fff;
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    font-size: 9px;
+    line-height: 1;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.reorder-btn:disabled { opacity: 0.25; }
+.reorder-btn:active { background: var(--accent); color: #1a1a2e; }
+
+.health-bar.small { height: 7px; }
 
 .battle-btn {
-    padding: 12px;
-    background: #4a4a6a;
+    /* 44px keeps every action a comfortable thumb target */
+    min-height: 44px;
+    padding: 10px;
+    background: var(--surface);
     color: #fff;
-    border: 2px solid #ffcc00;
+    border: 2px solid var(--accent);
     border-radius: 8px;
-    font-family: 'Press Start 2P', cursive;
-    font-size: 14px;
+    font-family: inherit;
+    font-size: 10px;
     cursor: pointer;
-    transition: all 0.2s;
+    touch-action: manipulation;
 }
 
-.battle-btn:hover {
+.battle-btn:active {
     background: #5a5a7a;
-    transform: scale(1.05);
 }
 
 .battle-btn:disabled {
-    opacity: 0.5;
+    opacity: 0.45;
     cursor: not-allowed;
 }
 
+/* The height is a whole number of lines (5 x 16px plus padding). Scrolled to
+   the bottom, an odd height leaves a half-cut line along the top edge, which
+   reads as a rendering fault rather than as more text above. */
 .battle-log {
     height: 100px;
     overflow-y: auto;
-    background: rgba(20, 20, 30, 0.8);
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    background: rgba(20, 20, 30, 0.85);
     border-radius: 8px;
     padding: 10px;
-    color: #fff;
-    font-size: 12px;
-    text-shadow: 1px 1px 2px #000;
+    font-size: 9px;
+    line-height: 16px;
 }
 
-.battle-log::-webkit-scrollbar {
+.battle-items {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    background: rgba(20, 20, 30, 0.9);
+    border-radius: 8px;
+}
+
+.battle-items h3 {
+    margin: 0;
+    font-size: 10px;
+    color: var(--accent);
+}
+
+.battle-log::-webkit-scrollbar,
+.monster-list::-webkit-scrollbar,
+.item-list::-webkit-scrollbar {
     width: 6px;
 }
 
-.battle-log::-webkit-scrollbar-thumb {
-    background: #ffcc00;
+.battle-log::-webkit-scrollbar-thumb,
+.monster-list::-webkit-scrollbar-thumb,
+.item-list::-webkit-scrollbar-thumb {
+    background: var(--accent);
     border-radius: 3px;
 }
 
-/* Menu UI */
-#menu-ui {
+/* Menu, shop, dex and Willow Rest overlays */
+#menu-ui, #shop-ui, #dex-ui, #mentor-ui {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    inset: 0;
     background: rgba(0, 0, 0, 0.9);
     display: flex;
     justify-content: center;
     align-items: center;
     pointer-events: auto;
+    padding: calc(10px + var(--safe-top)) calc(10px + var(--safe-right))
+             calc(10px + var(--safe-bottom)) calc(10px + var(--safe-left));
 }
 
 .menu-panel {
-    width: 80%;
+    width: 100%;
     max-width: 500px;
-    background: rgba(30, 30, 40, 0.95);
-    border: 4px solid #ffcc00;
+    max-height: 100%;
+    overflow-y: auto;
+    background: var(--panel);
+    border: 3px solid var(--accent);
     border-radius: 12px;
-    padding: 20px;
-    color: #fff;
+    padding: 16px;
 }
 
-.menu-panel > * {
-    pointer-events: auto;
+.menu-panel h2 {
+    font-size: 14px;
+    margin: 0 0 14px;
 }
 
 .menu-section {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
 }
 
 .menu-section h3 {
-    border-bottom: 2px solid #ffcc00;
-    padding-bottom: 5px;
-    margin-bottom: 10px;
+    font-size: 10px;
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 6px;
+    margin: 0 0 10px;
 }
+
+.section-hint { font-size: 8px; font-weight: normal; }
+
+.monster-row.fainted { opacity: 0.5; }
 
 .monster-list, .item-list {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    max-height: 200px;
+    /* Rows carry a sprite, health and EXP now, so give the list more room */
+    max-height: 250px;
     overflow-y: auto;
-}
-
-.monster-list::-webkit-scrollbar, .item-list::-webkit-scrollbar {
-    width: 6px;
-}
-
-.monster-list::-webkit-scrollbar-thumb, .item-list::-webkit-scrollbar-thumb {
-    background: #ffcc00;
-    border-radius: 3px;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
 }
 
 .monster-item, .item-item {
     display: flex;
     justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
     padding: 8px 12px;
-    background: rgba(50, 50, 60, 0.8);
+    background: var(--panel-soft);
     border-radius: 4px;
+    font-size: 9px;
+    line-height: 1.6;
     cursor: pointer;
-    transition: all 0.2s;
+    touch-action: manipulation;
 }
 
-.monster-item:hover, .item-item:hover {
-    background: rgba(70, 70, 80, 0.8);
+.monster-item:active, .item-item:active {
+    background: rgba(70, 70, 80, 0.9);
+}
+
+.item-item .item-description {
+    opacity: 0.7;
+    text-align: right;
 }
 
 #close-menu-btn {
+    min-height: 44px;
     padding: 12px 24px;
-    background: #4a4a6a;
+    background: var(--surface);
     color: #fff;
-    border: 2px solid #ffcc00;
+    border: 2px solid var(--accent);
     border-radius: 8px;
-    font-family: 'Press Start 2P', cursive;
-    font-size: 14px;
+    font-family: inherit;
+    font-size: 10px;
     cursor: pointer;
     display: block;
     margin: 0 auto;
+    touch-action: manipulation;
 }
 
 /* Encounter Notification */
 #encounter-notification {
     position: absolute;
-    top: 50%;
+    /* Sits above the battle panel rather than over its health bars */
+    top: calc(60px + var(--safe-top));
     left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(255, 200, 0, 0.9);
+    transform: translate(-50%, 0);
+    max-width: calc(100% - 40px);
+    text-align: center;
+    background: rgba(255, 200, 0, 0.95);
     color: #000;
-    padding: 20px 40px;
+    padding: 16px 24px;
     border-radius: 8px;
-    font-size: 18px;
-    font-weight: bold;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-    pointer-events: auto;
+    font-size: 11px;
+    line-height: 1.6;
     z-index: 1000;
     animation: pulse 1.5s infinite;
 }
 
 @keyframes pulse {
-    0% { transform: translate(-50%, -50%) scale(1); }
-    50% { transform: translate(-50%, -50%) scale(1.1); }
-    100% { transform: translate(-50%, -50%) scale(1); }
+    0%   { transform: translate(-50%, 0) scale(1); }
+    50%  { transform: translate(-50%, 0) scale(1.08); }
+    100% { transform: translate(-50%, 0) scale(1); }
+}
+
+/* Sits just under the HUD rather than across the middle of the screen: at
+   35% it landed on top of whatever panel happened to be open. */
+.game-message {
+    position: fixed;
+    top: calc(70px + var(--safe-top));
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: min(76%, 420px);
+    text-align: center;
+    background: rgba(0, 0, 0, 0.88);
+    border: 2px solid var(--accent);
+    color: #fff;
+    padding: 16px 20px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 10px;
+    line-height: 1.6;
+    z-index: 1500;
 }
 
 /* Hidden class */
@@ -284,25 +755,34 @@ body {
 /* Load screen */
 #loading-screen {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    inset: 0;
     background: #1a1a2e;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    color: #fff;
+    padding: 20px;
+    text-align: center;
     z-index: 2000;
 }
 
+.loading-title {
+    color: var(--accent);
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.8;
+}
+
+.loading-text {
+    margin: 14px 0;
+    font-size: 10px;
+}
+
 #loading-progress {
-    width: 300px;
-    height: 30px;
+    width: min(300px, 80vw);
+    height: 22px;
     background: #333;
-    border-radius: 15px;
-    margin-top: 20px;
+    border-radius: 11px;
     overflow: hidden;
 }
 
@@ -310,22 +790,243 @@ body {
     height: 100%;
     width: 0%;
     background: linear-gradient(90deg, #ff0000, #ffff00);
-    border-radius: 15px;
     transition: width 0.3s ease;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-    .battle-actions {
-        grid-template-columns: 1fr;
-    }
-    
+/* Phones: shrink the chrome so the world keeps most of the screen */
+@media (max-width: 560px) {
     #minimap-container {
-        width: 100px;
-        height: 100px;
+        width: 84px;
+        height: 84px;
     }
-    
+
     #player-stats {
-        font-size: 10px;
+        font-size: 8px;
+        padding: 6px;
     }
+
+    #dpad {
+        width: 150px;
+        height: 150px;
+    }
+
+    .dpad-btn {
+        width: 50px;
+        height: 50px;
+    }
+
+    .dpad-up    { left: 50px; }
+    .dpad-left  { top: 50px; }
+    .dpad-right { top: 50px; left: 100px; }
+    .dpad-down  { top: 100px; left: 50px; }
+
+    .battle-log {
+        height: 72px;
+    }
+
+    .scroll-list { max-height: 128px; }
+}
+
+/* Landscape phones are short: keep the d-pad small and the panels compact */
+@media (max-height: 480px) and (orientation: landscape) {
+    .action-btn { min-width: 54px; min-height: 54px; font-size: 9px; }
+    .action-btn.primary-action { min-width: 58px; min-height: 58px; font-size: 17px; }
+    .action-stack { gap: 7px; }
+    .dialogue-box { min-height: 76px; padding: 10px 14px 22px; }
+
+    /* Put the battle panel beside the monsters rather than under them -
+       there is no vertical room to stack both on a short screen. */
+    #battle-ui {
+        justify-content: flex-end;
+        align-items: center;
+    }
+
+    #battle-ui .battle-panel {
+        max-width: 56%;
+        max-height: 100%;
+    }
+
+    #dpad {
+        width: 132px;
+        height: 132px;
+    }
+
+    .dpad-btn {
+        width: 44px;
+        height: 44px;
+        font-size: 15px;
+    }
+
+    .dpad-up    { left: 44px; }
+    .dpad-left  { top: 44px; }
+    .dpad-right { top: 44px; left: 88px; }
+    .dpad-down  { top: 88px; left: 44px; }
+
+    .battle-actions, .move-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    /* Two whole lines, on the same reasoning as the portrait height above */
+    .battle-log {
+        height: 52px;
+    }
+
+    /* The momentum row costs vertical space the short screen does not have,
+       so tighten everything a notch rather than pushing Run off the panel. */
+    .battle-panel { gap: 8px; padding: 10px; }
+    .momentum-row { margin: 0; }
+    .momentum-label { display: none; }
+    .burst-btn { padding: 4px 6px; min-height: 24px; }
+
+    .monster-list, .item-list, .scroll-list {
+        max-height: 96px;
+    }
+
+    .scroll-list.tall, .monster-list.tall { max-height: 38vh; }
+}
+
+/* --- momentum and Burst ------------------------------------------------- */
+
+.momentum-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 4px 0 2px;
+}
+
+.momentum-label { font-size: 7px; letter-spacing: 1px; }
+
+.momentum-bar {
+    flex: 1;
+    height: 6px;
+    background: #2b2b3a;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.momentum-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #7a4fd0, #b98fff);
+    transition: width 0.3s ease;
+}
+
+/* A full gauge should be impossible to miss out of the corner of your eye */
+.momentum-fill.full {
+    background: linear-gradient(90deg, #f6d02c, #fff0a0);
+    animation: momentum-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes momentum-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+}
+
+.burst-btn {
+    font-family: inherit;
+    font-size: 8px;
+    letter-spacing: 1px;
+    padding: 6px 8px;
+    min-height: 28px;
+    border: none;
+    border-radius: 6px;
+    background: var(--surface);
+    color: #fff;
+    opacity: 0.5;
+}
+
+.burst-btn.ready {
+    background: linear-gradient(180deg, #ffd24a, #e0a000);
+    color: #1a1a2e;
+    opacity: 1;
+    box-shadow: 0 0 10px rgba(255, 204, 0, 0.55);
+}
+
+.burst-btn.armed {
+    background: linear-gradient(180deg, #b98fff, #7a4fd0);
+    color: #fff;
+    opacity: 1;
+}
+
+/* --- bond hearts --------------------------------------------------------- */
+
+.bond-row {
+    display: flex;
+    gap: 2px;
+    margin-top: 3px;
+}
+
+.heart {
+    font-size: 9px;
+    color: #3a3a4e;
+    line-height: 1;
+}
+
+.heart.filled { color: #ff6b8a; }
+
+/* --- a dialogue that asks something -------------------------------------- */
+
+.dialogue-choices {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.dialogue-choices .battle-btn { flex: 1; }
+
+/* --- mentoring at Willow Rest -------------------------------------------- */
+
+.mentor-hint {
+    font-size: 8px;
+    line-height: 1.6;
+    opacity: 0.75;
+    margin: 0 0 8px;
+}
+
+.monster-row.selectable {
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+    border: none;
+    cursor: pointer;
+}
+
+.monster-row.selectable:disabled { opacity: 0.4; }
+
+.monster-row.picked { outline: 2px solid #7fc4ff; }
+
+.mentor-summary {
+    background: var(--panel-soft);
+    border-radius: 8px;
+    padding: 10px;
+    margin: 8px 0;
+    line-height: 1.7;
+}
+
+.mentor-pair { font-size: 10px; color: var(--accent); }
+.mentor-detail { font-size: 8px; margin-top: 6px; }
+.mentor-cost { font-size: 8px; color: var(--accent); margin-top: 6px; }
+
+/* The move buttons reuse the battle grid so they feel the same to tap */
+.mentor-moves {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+/* --- type badges --------------------------------------------------------- */
+
+.type-chips {
+    display: inline-flex;
+    gap: 3px;
+}
+
+.type-chip {
+    font-size: 6px;
+    letter-spacing: 0.5px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    color: #14141c;
+    text-shadow: none;
 }

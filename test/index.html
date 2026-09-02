@@ -128,6 +128,11 @@
         </div>
 
         <div class="test-section">
+            <h2>Time, weather, momentum, bonds and mentoring</h2>
+            <div id="systems-tests"></div>
+        </div>
+
+        <div class="test-section">
             <h2>🐛 Known Issues</h2>
             <div id="known-issues"></div>
         </div>
@@ -158,12 +163,19 @@
         const failedTestsEl = document.getElementById('failed-tests');
         const warningTestsEl = document.getElementById('warning-tests');
 
+        // Section the next results are appended to
+        let currentSection = null;
+
         function addResult(message, type = 'info') {
             testResults.total++;
-            
+
             const div = document.createElement('div');
             div.className = `test-result ${type}`;
             div.textContent = message;
+
+            if (currentSection) {
+                currentSection.appendChild(div);
+            }
             
             switch(type) {
                 case 'pass':
@@ -207,7 +219,7 @@
 
         // Core Tests
         function testCore() {
-            const section = document.getElementById('core-tests');
+            currentSection = document.getElementById('core-tests');
             
             runTest('CONFIG object exists', () => {
                 if (typeof CONFIG === 'undefined') throw new Error('CONFIG not loaded');
@@ -232,55 +244,309 @@
             });
             
             runTest('Helper functions exist', () => {
-                if (typeof getRandomMonsterForZone !== 'function') throw new Error('getRandomMonsterForZone missing');
-                if (typeof getMonsterStats !== 'function') throw new Error('getMonsterStats missing');
-                if (typeof getRandomWildLevel !== 'function') throw new Error('getRandomWildLevel missing');
+                ['getRandomMonsterForZone', 'getSpecies', 'getMove', 'getMovesForLevel',
+                 'getTypeMultiplier', 'getMapDef'].forEach(name => {
+                    if (typeof window[name] !== 'function') throw new Error(`${name} missing`);
+                });
+                return true;
+            });
+
+            runTest('Every species is complete and self-consistent', () => {
+                DEX_ORDER.forEach(name => {
+                    const species = getSpecies(name);
+                    if (!TYPES.includes(species.type)) return `${name} has an unknown type`;
+                    if (!species.moves.length) return `${name} has no moves`;
+                    species.moves.forEach(([, move]) => {
+                        if (!MOVES[move]) throw new Error(`${name} learns unknown move ${move}`);
+                    });
+                    if (species.evolvesTo && !SPECIES[species.evolvesTo]) {
+                        throw new Error(`${name} evolves into unknown ${species.evolvesTo}`);
+                    }
+                });
+                return true;
+            });
+
+            runTest('Every zone roster references real species', () => {
+                Object.entries(CONFIG.ZONES).forEach(([zone, data]) => {
+                    (data.monsters || []).forEach(name => {
+                        if (!SPECIES[name]) throw new Error(`${zone} lists unknown ${name}`);
+                    });
+                });
+                return true;
+            });
+
+            runTest('Type chart covers every pairing', () => {
+                TYPES.forEach(a => TYPES.forEach(b => {
+                    const value = TYPE_CHART[a]?.[b];
+                    if (typeof value !== 'number') throw new Error(`${a} vs ${b} is missing`);
+                }));
+                return true;
+            });
+
+            runTest('Every monster has a usable move against every type', () => {
+                // Guards against the dead matchups an all-resisted moveset creates
+                const dead = [];
+                DEX_ORDER.forEach(name => {
+                    const species = getSpecies(name);
+                    // An evolving species never exists past its evolution level
+                    const cap = species.evolvesTo ? species.evolvesAt - 1 : CONFIG.MAX_LEVEL;
+                    const moves = getMovesForLevel(name, cap).map(getMove);
+                    TYPES.forEach(defenderType => {
+                        const best = Math.max(...moves
+                            .filter(m => m.power > 0)
+                            .map(m => getTypeMultiplier(m.type, defenderType)));
+                        if (best < 1) dead.push(`${name} vs ${defenderType}`);
+                    });
+                });
+                if (dead.length) return `No neutral option: ${dead.slice(0, 3).join(', ')}`;
+                return true;
+            });
+
+            runTest('Every monster keeps at least two attacking moves', () => {
+                const thin = [];
+                DEX_ORDER.forEach(name => {
+                    const species = getSpecies(name);
+                    const cap = species.evolvesTo ? species.evolvesAt - 1 : CONFIG.MAX_LEVEL;
+                    const attacks = getMovesForLevel(name, cap).map(getMove).filter(m => m.power > 0);
+                    if (attacks.length < 2) thin.push(`${name} (${attacks.length})`);
+                });
+                if (thin.length) return `Too few attacks: ${thin.join(', ')}`;
                 return true;
             });
         }
 
         // World Tests
         function testWorld() {
-            const section = document.getElementById('world-tests');
+            currentSection = document.getElementById('world-tests');
             
-            runTest('WorldGenerator class exists', () => {
-                if (typeof WorldGenerator === 'undefined') throw new Error('WorldGenerator not defined');
+            runTest('WorldMap class exists', () => {
+                if (typeof WorldMap === 'undefined') throw new Error('WorldMap not defined');
                 return true;
             });
-            
-            runTest('WorldGenerator can be instantiated', () => {
-                const gen = new WorldGenerator();
-                if (!gen) throw new Error('Could not create WorldGenerator');
+
+            runTest('Every map builds without error', () => {
+                Object.keys(MAPS).forEach(id => {
+                    const map = new WorldMap(id);
+                    if (map.tiles.length !== map.worldHeight) {
+                        throw new Error(`${id} height mismatch`);
+                    }
+                });
                 return true;
             });
-            
-            runTest('WorldGenerator generates valid world', () => {
-                const gen = new WorldGenerator();
-                const world = gen.generate();
-                if (!world || world.length === 0) throw new Error('World is empty');
-                if (world.length !== CONFIG.WORLD_HEIGHT) return `World height mismatch: ${world.length} vs ${CONFIG.WORLD_HEIGHT}`;
+
+            runTest('Map generation is deterministic', () => {
+                const a = new WorldMap('route_1');
+                const b = new WorldMap('route_1');
+
+                for (let y = 0; y < a.worldHeight; y++) {
+                    for (let x = 0; x < a.worldWidth; x++) {
+                        if (a.tiles[y][x].type !== b.tiles[y][x].type) {
+                            return `Route 1 differs at ${x},${y} between visits`;
+                        }
+                    }
+                }
                 return true;
             });
-            
-            runTest('World has proper zones', () => {
-                const gen = new WorldGenerator();
-                gen.generate();
-                const zones = gen.zoneMap;
-                if (!zones || zones.length === 0) throw new Error('No zones generated');
+
+            runTest('Every exit leads somewhere, and back again', () => {
+                Object.entries(MAPS).forEach(([id, def]) => {
+                    def.exits.forEach(exit => {
+                        const target = MAPS[exit.to];
+                        if (!target) throw new Error(`${id} exits to unknown ${exit.to}`);
+
+                        const back = target.exits.find(e => e.to === id);
+                        if (!back) throw new Error(`${exit.to} has no way back to ${id}`);
+                        if (back.side !== OPPOSITE_SIDE[exit.side]) {
+                            throw new Error(`${id}/${exit.to} exits do not face each other`);
+                        }
+                    });
+                });
                 return true;
             });
-            
-            runTest('Collision map is generated', () => {
-                const gen = new WorldGenerator();
-                gen.generate();
-                if (!gen.collisionMap || gen.collisionMap.length === 0) throw new Error('No collision map');
+
+            runTest('Every exit is reachable from the map spawn', () => {
+                // Flood fill from the spawn; a route whose exit is walled off
+                // would strand the player.
+                const blocked = [];
+
+                Object.keys(MAPS).forEach(id => {
+                    const map = new WorldMap(id);
+                    const spawn = map.getDefaultSpawn();
+                    const start = {
+                        x: Math.floor(spawn.x / CONFIG.TILE_SIZE),
+                        y: Math.floor(spawn.y / CONFIG.TILE_SIZE)
+                    };
+
+                    const seen = new Set([`${start.x},${start.y}`]);
+                    const queue = [start];
+
+                    while (queue.length) {
+                        const { x, y } = queue.shift();
+                        [[0,1],[0,-1],[1,0],[-1,0]].forEach(([dx, dy]) => {
+                            const nx = x + dx;
+                            const ny = y + dy;
+                            const key = `${nx},${ny}`;
+                            if (seen.has(key) || !map.inBounds(nx, ny)) return;
+                            if (WorldMap.SOLID_TILES.has(map.tiles[ny][nx].type)) return;
+                            seen.add(key);
+                            queue.push({ x: nx, y: ny });
+                        });
+                    }
+
+                    map.exits.forEach(exit => {
+                        if (!seen.has(`${exit.x},${exit.y}`)) {
+                            blocked.push(`${id} -> ${exit.to}`);
+                        }
+                    });
+                });
+
+                if (blocked.length) return `Unreachable exits: ${[...new Set(blocked)].join(', ')}`;
+                return true;
+            });
+
+            runTest('Towns are safe and have a healer and a shop', () => {
+                Object.entries(MAPS).filter(([, def]) => def.kind === 'town').forEach(([id, def]) => {
+                    const roles = (def.npcs || []).map(n => n.role);
+
+                    // A `plain` town is a destination rather than a rest stop -
+                    // Willow Rest deliberately has no shop counter.
+                    if (!def.plain) {
+                        if (!roles.includes('heal')) throw new Error(`${id} has no healer`);
+                        if (!roles.includes('shop')) throw new Error(`${id} has no shop`);
+                    }
+
+                    const map = new WorldMap(id);
+                    const encounterTiles = map.tiles.flat().filter(t => t.encounter);
+                    if (encounterTiles.length) throw new Error(`${id} has wild encounters`);
+
+                    // ...and if it says it is plain, the pads must really be gone
+                    if (def.plain) {
+                        const pads = map.tiles.flat()
+                            .filter(t => t.type === 'heal_pad' || t.type === 'shop_pad');
+                        if (pads.length) throw new Error(`${id} is plain but still has a counter`);
+                    }
+                });
+                return true;
+            });
+
+            runTest('Every hidden item sits somewhere you can stand', () => {
+                const stuck = [];
+                Object.keys(MAPS).forEach(id => {
+                    const map = new WorldMap(id);
+                    map.items.forEach(item => {
+                        if (map.isCollidable(item.x, item.y)) stuck.push(`${id} ${item.item}`);
+                        if (!CONFIG.ITEMS[item.item]) throw new Error(`${id}: unknown item ${item.item}`);
+                    });
+                });
+                if (stuck.length) return `Unreachable pickups: ${stuck.join(', ')}`;
+                return true;
+            });
+
+            runTest('Every hidden item is reachable from the spawn', () => {
+                const stranded = [];
+                Object.keys(MAPS).forEach(id => {
+                    const map = new WorldMap(id);
+                    if (!map.items.length) return;
+
+                    const spawn = map.getDefaultSpawn();
+                    const start = {
+                        x: Math.floor(spawn.x / CONFIG.TILE_SIZE),
+                        y: Math.floor(spawn.y / CONFIG.TILE_SIZE)
+                    };
+                    const seen = new Set([`${start.x},${start.y}`]);
+                    const queue = [start];
+
+                    while (queue.length) {
+                        const { x, y } = queue.shift();
+                        [[0,1],[0,-1],[1,0],[-1,0]].forEach(([dx, dy]) => {
+                            const nx = x + dx, ny = y + dy, key = `${nx},${ny}`;
+                            if (seen.has(key) || !map.inBounds(nx, ny)) return;
+                            if (WorldMap.SOLID_TILES.has(map.tiles[ny][nx].type)) return;
+                            seen.add(key);
+                            queue.push({ x: nx, y: ny });
+                        });
+                    }
+
+                    map.items.forEach(item => {
+                        if (!seen.has(`${item.x},${item.y}`)) stranded.push(`${id} ${item.item}`);
+                    });
+                });
+                if (stranded.length) return `Walled-off pickups: ${stranded.join(', ')}`;
+                return true;
+            });
+
+            runTest('Trainers with sight face a direction and can see', () => {
+                Object.keys(MAPS).forEach(id => {
+                    const map = new WorldMap(id);
+                    map.npcs.filter(n => n.sight > 0).forEach(npc => {
+                        if (!npc.facing) throw new Error(`${id}: ${npc.id} has sight but no facing`);
+                        if (!npc.trainer) throw new Error(`${id}: ${npc.id} has sight but is not a trainer`);
+                        if (map.tilesInFront(npc).length === 0) {
+                            throw new Error(`${id}: ${npc.id} is staring straight into a wall`);
+                        }
+                    });
+                });
+                return true;
+            });
+
+            runTest('The rival chain runs in order', () => {
+                const rivals = Object.entries(MAPS)
+                    .flatMap(([id, def]) => (def.npcs || [])
+                        .filter(n => n.rivalStage)
+                        .map(n => ({ map: id, ...n })))
+                    .sort((a, b) => a.rivalStage - b.rivalStage);
+
+                if (rivals.length < 2) return 'Fewer than two rival meetings';
+                if (rivals[0].requires) return 'The first meeting should not be gated';
+
+                for (let i = 1; i < rivals.length; i++) {
+                    const expected = `${rivals[i - 1].map}:${rivals[i - 1].id}`;
+                    if (rivals[i].requires !== expected) {
+                        return `Stage ${rivals[i].rivalStage} requires ${rivals[i].requires}, expected ${expected}`;
+                    }
+                    const prevTop = Math.max(...rivals[i - 1].trainer.team.map(t => t[1]));
+                    const thisTop = Math.max(...rivals[i].trainer.team.map(t => t[1]));
+                    if (thisTop <= prevTop) return `Stage ${rivals[i].rivalStage} is not stronger than the last`;
+                }
+                return true;
+            });
+
+            runTest('Wandering NPCs stay in reach of where they started', () => {
+                Object.keys(MAPS).forEach(id => {
+                    const map = new WorldMap(id);
+                    map.npcs.filter(n => n.wander).forEach(npc => {
+                        if (npc.homeX === undefined || npc.homeY === undefined) {
+                            throw new Error(`${id}: ${npc.id} has no home tile`);
+                        }
+                        if (npc.wander < 1 || npc.wander > 4) {
+                            throw new Error(`${id}: ${npc.id} wanders too far (${npc.wander})`);
+                        }
+                    });
+                });
+                return true;
+            });
+
+            runTest('Trainer teams use real species and sane levels', () => {
+                Object.entries(MAPS).forEach(([id, def]) => {
+                    (def.npcs || []).filter(n => n.trainer).forEach(npc => {
+                        const band = def.levels || [1, 50];
+                        // The rival is deliberately ahead of the local curve
+                        const slack = npc.rivalStage ? 12 : 3;
+                        npc.trainer.team.forEach(([name, level]) => {
+                            if (!SPECIES[name]) throw new Error(`${id}: unknown ${name}`);
+                            if (level < band[0] - 1 || level > band[1] + slack) {
+                                throw new Error(`${id}: ${name} at ${level} is outside the route band ${band}`);
+                            }
+                        });
+                    });
+                });
                 return true;
             });
         }
 
         // Entity Tests
         function testEntities() {
-            const section = document.getElementById('entity-tests');
+            currentSection = document.getElementById('entity-tests');
             
             runTest('Monster class exists', () => {
                 if (typeof Monster === 'undefined') throw new Error('Monster class not defined');
@@ -293,15 +559,53 @@
             });
             
             runTest('Monster stats are valid', () => {
-                const monster = new Monster({ add: () => {}, time: { now: 0 } }, 'Slime', 1, true);
+                const monster = new Monster('Slime', 1, true);
                 if (!monster.name || !monster.level || !monster.hp) throw new Error('Monster missing properties');
+                if (monster.type !== getSpecies('Slime').type) return 'Type does not match the species';
+                return true;
+            });
+
+            runTest('Monsters level up, learn moves and evolve', () => {
+                const monster = new Monster('Slime', 15);
+                let evolved = false;
+                for (let i = 0; i < 30 && monster.level < 20; i++) {
+                    monster.gainExp(monster.expToLevel).forEach(e => {
+                        if (e.kind === 'evolved') evolved = true;
+                    });
+                }
+                if (!evolved) return 'Slime never evolved by level 20';
+                if (monster.name !== 'Oozer') return `Evolved into ${monster.name}`;
+                if (monster.moves.length > 4) return 'Kept more than four moves';
+                return true;
+            });
+
+            runTest('Route level bands climb along the route chain', () => {
+                const bands = ['route_1', 'route_2', 'route_3', 'ember_cave', 'dust_road']
+                    .map(id => getMapDef(id).levels);
+
+                for (let i = 1; i < bands.length; i++) {
+                    if (bands[i][0] <= bands[i - 1][0]) {
+                        return `Band ${i} (${bands[i]}) does not climb past ${bands[i - 1]}`;
+                    }
+                }
+                return true;
+            });
+
+            runTest('Route 1 is winnable with the starting team', () => {
+                const starters = [new Monster('Slime', 6), new Monster('Rat', 6)];
+                const [min, max] = getMapDef('route_1').levels;
+
+                if (max > starters[0].level) {
+                    return `Route 1 tops out at ${max}, above the level ${starters[0].level} starter`;
+                }
+                if (min < 2) return 'Route 1 monsters are below level 2';
                 return true;
             });
         }
 
         // Battle System Tests
         function testBattle() {
-            const section = document.getElementById('battle-tests');
+            currentSection = document.getElementById('battle-tests');
             
             runTest('BattleSystem class exists', () => {
                 if (typeof BattleSystem === 'undefined') throw new Error('BattleSystem not defined');
@@ -316,8 +620,7 @@
             });
             
             runTest('Monster can take damage', () => {
-                const scene = { add: () => ({}), time: { now: 0 } };
-                const monster = new Monster(scene, 'Slime', 5, true);
+                const monster = new Monster('Slime', 5, true);
                 const oldHp = monster.hp;
                 monster.takeDamage(10);
                 if (monster.hp >= oldHp) return 'HP did not decrease after damage';
@@ -325,19 +628,118 @@
             });
             
             runTest('Monster can heal', () => {
-                const scene = { add: () => ({}), time: { now: 0 } };
-                const monster = new Monster(scene, 'Slime', 5, true);
+                const monster = new Monster('Slime', 5, true);
                 monster.takeDamage(10);
                 const oldHp = monster.hp;
                 monster.heal(5);
                 if (monster.hp <= oldHp) return 'HP did not increase after healing';
                 return true;
             });
+
+            runTest('Status effects apply and wear off', () => {
+                const monster = new Monster('Slime', 10, true);
+                if (!monster.applyStatus('poison')) return 'Could not apply poison';
+                if (monster.applyStatus('burn')) return 'Allowed a second status';
+                const before = monster.hp;
+                monster.applyEndOfTurnStatus();
+                if (monster.hp >= before) return 'Poison did no damage';
+                return true;
+            });
+
+            runTest('Turn order follows priority, then speed', () => {
+                const scene = { events: { emit: () => {} }, time: { delayedCall: () => {} } };
+                const battle = new BattleSystem(scene);
+
+                const slow = new Monster('Golem', 20);
+                const fast = new Monster('Bat', 20);
+                if (fast.effectiveSpeed() <= slow.effectiveSpeed()) return 'Bat is not faster than Golem';
+
+                const tackle = getMove('Tackle');
+                if (battle.playerMovesFirst(slow, tackle, fast, tackle)) {
+                    return 'The slower monster moved first';
+                }
+                if (!battle.playerMovesFirst(slow, getMove('Quick Jab'), fast, tackle)) {
+                    return 'Priority did not beat speed';
+                }
+                return true;
+            });
+
+            runTest('Paralysis halves speed', () => {
+                const monster = new Monster('Bat', 20);
+                const before = monster.effectiveSpeed();
+                monster.applyStatus('paralysis');
+                if (monster.effectiveSpeed() >= before) return 'Speed did not drop';
+                return true;
+            });
+
+            runTest('Every move has PP, and stronger moves have less', () => {
+                Object.entries(MOVES).forEach(([name, move]) => {
+                    if (typeof move.pp !== 'number' || move.pp <= 0) {
+                        throw new Error(`${name} has no usable PP`);
+                    }
+                });
+
+                if (MOVES['Inferno'].pp >= MOVES['Ember'].pp) {
+                    return 'The strongest Fire move is not the scarcest';
+                }
+                return true;
+            });
+
+            runTest('Running out of PP falls back to Struggle', () => {
+                const monster = new Monster('Fox', 30);
+                monster.moves.forEach(name => {
+                    while (monster.hasPp(name)) monster.spendPp(name);
+                });
+
+                if (!monster.isOutOfPp()) return 'Monster still reports PP left';
+
+                const usable = monster.getUsableMoves();
+                if (usable.length !== 1 || usable[0].name !== 'Struggle') {
+                    return `Offered ${usable.map(m => m.name).join(', ')} instead of Struggle`;
+                }
+                return true;
+            });
+
+            runTest('Resting at the nurse refills PP', () => {
+                const monster = new Monster('Fox', 30);
+                const move = monster.moves[0];
+                while (monster.hasPp(move)) monster.spendPp(move);
+
+                monster.fullHeal();
+                if (monster.getPp(move) !== getMove(move).pp) return 'PP was not restored';
+                return true;
+            });
+
+            runTest('The team can be reordered', () => {
+                const scene = { add: { sprite: () => ({ setOrigin(){return this;}, setDepth(){return this;},
+                    play(){return this;}, anims: {}, setPosition(){return this;} }) }, map: {} };
+                const player = Object.create(Player.prototype);
+                player.monsters = [new Monster('Slime', 5), new Monster('Rat', 5), new Monster('Fox', 5)];
+                player.currentMonsterIndex = 0;
+
+                if (!player.reorderMonster(2, -1)) return 'Reorder was refused';
+                if (player.monsters[1].name !== 'Fox') return 'Fox did not move up';
+
+                player.reorderMonster(1, -1);
+                if (player.monsters[0].name !== 'Fox') return 'Fox did not reach the front';
+
+                if (player.reorderMonster(0, -1)) return 'Moving past the front was allowed';
+                if (player.reorderMonster(2, 1)) return 'Moving past the back was allowed';
+                return true;
+            });
+
+            runTest('Every item in the shop is buyable and defined', () => {
+                Object.entries(CONFIG.ITEMS).forEach(([name, item]) => {
+                    if (!item.type) throw new Error(`${name} has no type`);
+                    if (item.price === undefined) throw new Error(`${name} has no price`);
+                });
+                return true;
+            });
         }
 
         // Inventory Tests
         function testInventory() {
-            const section = document.getElementById('inventory-tests');
+            currentSection = document.getElementById('inventory-tests');
             
             runTest('Inventory class exists', () => {
                 if (typeof Inventory === 'undefined') throw new Error('Inventory class not defined');
@@ -370,7 +772,7 @@
 
         // UI Tests
         function testUI() {
-            const section = document.getElementById('ui-tests');
+            currentSection = document.getElementById('ui-tests');
             
             runTest('Minimap class exists', () => {
                 if (typeof Minimap === 'undefined') throw new Error('Minimap class not defined');
@@ -383,10 +785,19 @@
             });
             
             runTest('UI elements exist in HTML', () => {
-                const required = ['battle-ui', 'menu-ui', 'minimap-container', 'encounter-notification'];
+                // The game markup lives in the embedded game, not in this page
+                const frame = document.getElementById('game-frame');
+                const doc = frame && frame.contentDocument;
+                if (!doc || !doc.body || doc.readyState !== 'complete') {
+                    return 'Game frame not loaded yet - re-run to check';
+                }
+
+                const required = [
+                    'battle-ui', 'menu-ui', 'minimap-container',
+                    'encounter-notification', 'touch-controls', 'battle-items'
+                ];
                 for (const id of required) {
-                    const el = document.getElementById(id);
-                    if (!el) return `Missing UI element: ${id}`;
+                    if (!doc.getElementById(id)) return `Missing UI element: ${id}`;
                 }
                 return true;
             });
@@ -394,7 +805,7 @@
 
         // Audio Tests
         function testAudio() {
-            const section = document.getElementById('audio-tests');
+            currentSection = document.getElementById('audio-tests');
             
             runTest('AudioManager class exists', () => {
                 if (typeof AudioManager === 'undefined') throw new Error('AudioManager class not defined');
@@ -410,7 +821,7 @@
 
         // Known Issues
         function checkKnownIssues() {
-            const section = document.getElementById('known-issues');
+            currentSection = document.getElementById('known-issues');
             
             // Check for potential issues
             const issues = [];
@@ -424,18 +835,10 @@
             // (We'll add these when we have actual assets)
             
             // Display issues
-            issues.forEach(issue => {
-                const div = document.createElement('div');
-                div.className = 'test-result warn';
-                div.textContent = issue;
-                section.appendChild(div);
-            });
-            
+            issues.forEach(issue => addResult(issue, 'warn'));
+
             if (issues.length === 0) {
-                const div = document.createElement('div');
-                div.className = 'test-result pass';
-                div.textContent = '✅ No known issues detected';
-                section.appendChild(div);
+                addResult('✅ No known issues detected', 'pass');
             }
         }
 
@@ -443,6 +846,436 @@
             const frame = document.getElementById('game-frame');
             frame.style.display = 'block';
             frame.src = frame.src; // Refresh
+        }
+
+        // Time, weather, momentum, bonds and mentoring
+        function testSystems() {
+            currentSection = document.getElementById('systems-tests');
+
+            runTest('The clock passes through every phase of the day', () => {
+                const clock = new WorldClock(0);
+                const seen = new Set();
+                for (let i = 0; i < 200; i++) {
+                    clock.advance(WorldClock.DAY_MS / 200);
+                    seen.add(clock.phase.id);
+                }
+                const missing = WorldClock.PHASES.map(p => p.id).filter(id => !seen.has(id));
+                if (missing.length) throw new Error(`never reached: ${missing.join(', ')}`);
+                return true;
+            });
+
+            runTest('Every phase reads back the phase it was skipped to', () => {
+                WorldClock.PHASES.forEach(phase => {
+                    const clock = new WorldClock();
+                    clock.skipTo(phase.id);
+                    if (clock.phase.id !== phase.id) {
+                        throw new Error(`skipTo(${phase.id}) landed on ${clock.phase.id}`);
+                    }
+                });
+                return true;
+            });
+
+            runTest('The clock face runs forward through a plausible day', () => {
+                const at = (fraction) => {
+                    const clock = new WorldClock(fraction * WorldClock.DAY_MS);
+                    return clock.timeLabel;
+                };
+                // Dawn should read as morning and night as late evening, or the
+                // hour shown has nothing to do with the phase named beside it.
+                const dawn = parseInt(at(0.001), 10);
+                const night = parseInt(at(0.72), 10);
+                if (dawn < 4 || dawn > 7) return `dawn reads ${at(0.001)}`;
+                if (night < 20 || night > 23) return `night reads ${at(0.72)}`;
+                return true;
+            });
+
+            runTest('A new game starts in daylight', () => {
+                const clock = new WorldClock();
+                if (clock.isDark) throw new Error(`a fresh save starts at ${clock.timeLabel}`);
+                return true;
+            });
+
+            runTest('Every zone can roll weather, and towns stay clear', () => {
+                Object.keys(CONFIG.ZONES).forEach(zone => {
+                    for (let i = 0; i < 60; i++) {
+                        const id = rollWeather(zone, i % 2 === 0);
+                        if (!WEATHER[id]) throw new Error(`${zone} rolled unknown weather ${id}`);
+                        if (zone === 'VILLAGE' && id !== 'clear') {
+                            throw new Error(`a town rolled ${id}`);
+                        }
+                    }
+                });
+                return true;
+            });
+
+            runTest('The sun never comes out at night', () => {
+                for (let i = 0; i < 400; i++) {
+                    if (rollWeather('SAND', true) === 'sun') throw new Error('blazing sun after dark');
+                }
+                return true;
+            });
+
+            runTest('Rain and sun push Water and Fire in opposite directions', () => {
+                if (weatherDamageFactor('rain', 'Water') <= 1) throw new Error('rain does not lift Water');
+                if (weatherDamageFactor('rain', 'Fire') >= 1) throw new Error('rain does not damp Fire');
+                if (weatherDamageFactor('sun', 'Fire') <= 1) throw new Error('sun does not lift Fire');
+                if (weatherDamageFactor('sun', 'Water') >= 1) throw new Error('sun does not damp Water');
+                if (weatherDamageFactor('clear', 'Water') !== 1) throw new Error('clear weather is not neutral');
+                return true;
+            });
+
+            runTest('A sandstorm spares rock and grinds everything else', () => {
+                const rocky = new Monster('Golem', 20);
+                const soft = new Monster('Fox', 20);
+                if (weatherChipDamage('sandstorm', rocky) !== 0) throw new Error('Rock took sandstorm damage');
+                if (weatherChipDamage('sandstorm', soft) <= 0) throw new Error('a Fire type shrugged off a sandstorm');
+                if (weatherChipDamage('rain', soft) !== 0) throw new Error('rain dealt chip damage');
+                return true;
+            });
+
+            runTest('Effectiveness stacks across both of a monster\u2019s types', () => {
+                if (getEffectivenessAgainst('Water', ['Fire', 'Rock']) !== 4) {
+                    throw new Error('a double weakness did not stack');
+                }
+                if (getEffectivenessAgainst('Water', 'Fire') !== 2) {
+                    throw new Error('a bare type string was not handled');
+                }
+                if (getEffectivenessAgainst('Grass', ['Fire', 'Fire']) >= 1) {
+                    throw new Error('a double resistance did not stack');
+                }
+                return true;
+            });
+
+            runTest('An elder passes on a move it actually knows', () => {
+                const teacher = new Monster('Pyrefox', 24);
+                const student = new Monster('Fox', 10);
+
+                const options = teachableMoves(teacher, student);
+                if (!options.length) throw new Error('nothing to teach');
+                if (options.some(name => !teacher.moves.includes(name))) {
+                    throw new Error('offered a move the elder does not know');
+                }
+                if (options.some(name => student.moves.includes(name))) {
+                    throw new Error('offered a move the student already has');
+                }
+
+                const result = mentor(teacher, student, options[0]);
+                if (!result) throw new Error('refused a legal pairing');
+                if (!student.moves.includes(options[0])) throw new Error('the move did not stick');
+                if (result.levelsGained < 1) throw new Error('the student learned nothing but a move');
+                return true;
+            });
+
+            runTest('Mentoring costs the elder nothing', () => {
+                const teacher = new Monster('Rattler', 30);
+                const student = new Monster('Rat', 12);
+                const before = {
+                    level: teacher.level, hp: teacher.hp,
+                    moves: teacher.moves.join(','), name: teacher.name
+                };
+
+                mentor(teacher, student, teachableMoves(teacher, student)[0]);
+
+                if (teacher.level !== before.level) throw new Error('the elder lost levels');
+                if (teacher.hp !== before.hp) throw new Error('the elder lost health');
+                if (teacher.moves.join(',') !== before.moves) throw new Error('the elder lost moves');
+                if (teacher.name !== before.name) throw new Error('the elder was changed');
+                return true;
+            });
+
+            runTest('Mentoring refuses what it should refuse', () => {
+                const older = new Monster('Pyrefox', 24);
+                const barelyOlder = new Monster('Rat', 7);
+                const younger = new Monster('Rat', 6);
+
+                if (canMentor(older, older).ok) throw new Error('taught itself');
+                if (canMentor(barelyOlder, younger).ok) throw new Error('a one-level gap was allowed');
+
+                // A student that already knows the lot has nothing to gain
+                const twin = new Monster('Fox', 10);
+                const same = new Monster('Fox', 30);
+                same.moves = [...twin.moves];
+                if (canMentor(same, twin).ok) throw new Error('taught a student that knew everything');
+                return true;
+            });
+
+            runTest('The player chooses which move is given up', () => {
+                const teacher = new Monster('Oozer', 40);
+                const student = new Monster('Turtle', 34);
+                if (student.moves.length !== 4) throw new Error('this case needs a full moveset');
+
+                const learning = teachableMoves(teacher, student)[0];
+                const giving = student.moves[1];
+
+                // Naming nothing is refused rather than silently dropping one
+                const clone = Monster.fromData(student.getSaveData());
+                if (mentor(teacher, clone, learning)) throw new Error('dropped a move unasked');
+
+                const result = mentor(teacher, student, learning, giving);
+                if (!result) throw new Error('refused a legal swap');
+                if (student.moves.includes(giving)) throw new Error('kept the move it was told to drop');
+                if (!student.moves.includes(learning)) throw new Error('did not learn the new move');
+                if (student.moves.length > 4) throw new Error('ended up with five moves');
+                return true;
+            });
+
+            runTest('A move taught survives the levels that come with it', () => {
+                // The student can evolve and learn moves of its own on the way,
+                // and those must not push the taught move off the end.
+                const teacher = new Monster('Stormwing', 36);
+                const student = new Monster('Bird', 9);
+                const learning = teachableMoves(teacher, student)
+                    .find(name => !getMovesForLevel('Stormwing', 40).includes(name))
+                    || teachableMoves(teacher, student)[0];
+
+                mentor(teacher, student, learning, student.moves[0]);
+
+                if (!student.moves.includes(learning)) {
+                    throw new Error(`${learning} was lost to levelling`);
+                }
+                return true;
+            });
+
+            runTest('Species carry their own second type', () => {
+                const dual = DEX_ORDER.filter(name => getSpecies(name).type2);
+                if (!dual.length) throw new Error('no species has a second type');
+
+                dual.forEach(name => {
+                    const monster = new Monster(name, 20);
+                    if (monster.getTypes().length !== 2) throw new Error(`${name} has one type`);
+                    if (!TYPES.includes(monster.secondType)) throw new Error(`${name} has an unknown second type`);
+                    if (monster.secondType === monster.type) throw new Error(`${name} is doubled up`);
+                });
+
+                // And it survives a save, since it comes off the species
+                const restored = Monster.fromData(new Monster(dual[0], 20).getSaveData());
+                if (restored.getTypes().length !== 2) throw new Error('lost its second type on load');
+                return true;
+            });
+
+            runTest('Bonds build to five hearts and stop', () => {
+                const monster = new Monster('Fox', 10);
+                if (monster.bondHearts !== 0) throw new Error('starts with hearts');
+
+                for (let i = 0; i < 40; i++) monster.addBond(24);
+                if (monster.bondHearts !== 5) throw new Error(`ended on ${monster.bondHearts} hearts`);
+                if (monster.bond > Monster.MAX_BOND) throw new Error('bond ran past its cap');
+                if (monster.critChance() <= CONFIG.CRIT_CHANCE) throw new Error('bond did not improve crits');
+                return true;
+            });
+
+            runTest('Only a close monster holds on, and only once', () => {
+                const stranger = new Monster('Fox', 20);
+                stranger.hp = Math.floor(stranger.maxHp / 2);
+                for (let i = 0; i < 200; i++) {
+                    if (stranger.tryHangOn(9999)) throw new Error('a monster with no bond held on');
+                }
+
+                const friend = new Monster('Fox', 20);
+                friend.bond = Monster.MAX_BOND;
+
+                // Never from full health, and never against a survivable hit
+                if (friend.tryHangOn(9999)) throw new Error('held on from full health');
+                friend.hp = Math.floor(friend.maxHp / 2);
+                if (friend.tryHangOn(1)) throw new Error('held on against a harmless hit');
+
+                let held = false;
+                for (let i = 0; i < 200 && !held; i++) {
+                    friend.heldOn = false;
+                    friend.hp = Math.floor(friend.maxHp / 2);
+                    held = friend.tryHangOn(9999);
+                }
+                if (!held) throw new Error('a five-heart monster never held on in 200 tries');
+                if (friend.hp !== 1) throw new Error(`held on at ${friend.hp} HP`);
+                if (friend.tryHangOn(9999)) throw new Error('held on twice in one battle');
+                return true;
+            });
+
+            runTest('Every night roster is real, and the night has its own monsters', () => {
+                Object.entries(CONFIG.ZONES).forEach(([zone, data]) => {
+                    (data.night || []).forEach(name => {
+                        if (!SPECIES[name]) throw new Error(`${zone} lists unknown night monster ${name}`);
+                    });
+                });
+
+                if (!NOCTURNAL.length) throw new Error('no nocturnal species exist');
+
+                // Nothing that only comes out at night may show up in daylight
+                Object.keys(CONFIG.ZONES).forEach(zone => {
+                    for (let i = 0; i < 200; i++) {
+                        const name = getRandomMonsterForZone(zone, false);
+                        if (isNocturnal(name)) throw new Error(`${name} appeared in ${zone} by day`);
+                    }
+                });
+                return true;
+            });
+
+            runTest('Nocturnal species are reachable after dark', () => {
+                const reachable = new Set();
+                Object.keys(CONFIG.ZONES).forEach(zone => {
+                    for (let i = 0; i < 400; i++) reachable.add(getRandomMonsterForZone(zone, true));
+                });
+                // An evolution need not appear in the wild; its base form must
+                const unreachable = NOCTURNAL.filter(name => {
+                    const isEvolution = Object.values(SPECIES).some(s => s.evolvesTo === name);
+                    return !isEvolution && !reachable.has(name);
+                });
+                if (unreachable.length) throw new Error(`never appears: ${unreachable.join(', ')}`);
+                return true;
+            });
+
+            runTest('Every route event can actually fire', () => {
+                const contexts = [
+                    { coins: 500, teamSize: 1, isNight: false, weather: 'clear' },
+                    { coins: 500, teamSize: 1, isNight: true, weather: 'rain' },
+                    { coins: 0, teamSize: CONFIG.MAX_MONSTERS_IN_TEAM, isNight: true, weather: 'fog' }
+                ];
+                const seen = new Set();
+                contexts.forEach(ctx => eligibleRouteEvents(ctx).forEach(e => seen.add(e.id)));
+
+                const never = ROUTE_EVENTS.filter(e => !seen.has(e.id)).map(e => e.id);
+                if (never.length) throw new Error(`unreachable events: ${never.join(', ')}`);
+                return true;
+            });
+
+            runTest('Route events never promise what the player cannot take', () => {
+                // A full team must not be offered a stray, and a broke player
+                // must not be walked into a shop they cannot buy from.
+                const full = { coins: 0, teamSize: CONFIG.MAX_MONSTERS_IN_TEAM, isNight: false, weather: 'clear' };
+                const offered = eligibleRouteEvents(full).map(e => e.id);
+
+                if (offered.includes('stray')) throw new Error('offered a stray to a full team');
+                if (offered.includes('pedlar')) throw new Error('opened a shop for a player with no coins');
+                if (!offered.length) throw new Error('nothing at all can happen to a full, broke team');
+                return true;
+            });
+
+            runTest('Route events always resolve to something', () => {
+                for (let i = 0; i < 300; i++) {
+                    const event = rollRouteEvent({
+                        coins: Math.random() * 400, teamSize: 1 + Math.floor(Math.random() * 6),
+                        isNight: Math.random() < 0.5, weather: Math.random() < 0.5 ? 'clear' : 'rain'
+                    });
+                    if (!event || !event.id || !event.lines?.length) throw new Error('rolled an empty event');
+                }
+                return true;
+            });
+
+            runTest('The pedlar carries only things no town sells', () => {
+                CONFIG.PEDLAR_STOCK.forEach(name => {
+                    const item = CONFIG.ITEMS[name];
+                    if (!item) throw new Error(`the pedlar sells unknown item ${name}`);
+                    if (!item.price) throw new Error(`${name} has no price`);
+                });
+                const rare = Object.entries(CONFIG.ITEMS).filter(([, i]) => i.rare).map(([n]) => n);
+                const unsold = rare.filter(name => !CONFIG.PEDLAR_STOCK.includes(name));
+                if (unsold.length) throw new Error(`no way to buy: ${unsold.join(', ')}`);
+                return true;
+            });
+
+            runTest('Every item can be used or is explicitly for battle', () => {
+                // Guards the crash where the menu called a method that did not
+                // exist: every item type must have a branch in Player.useItem.
+                const handled = ['heal', 'cure', 'ball', 'pp', 'bond'];
+                const unknown = Object.entries(CONFIG.ITEMS)
+                    .filter(([, item]) => !handled.includes(item.type))
+                    .map(([name, item]) => `${name} (${item.type})`);
+                if (unknown.length) throw new Error(`no handler for: ${unknown.join(', ')}`);
+                if (typeof Player.prototype.useItem !== 'function') {
+                    throw new Error('Player.useItem does not exist');
+                }
+                return true;
+            });
+
+            runTest('Every map can be walked to from the starting town', () => {
+                const reachable = new Set([STARTING_MAP]);
+                const queue = [STARTING_MAP];
+                while (queue.length) {
+                    const id = queue.shift();
+                    (getMapDef(id).exits || []).forEach(exit => {
+                        if (reachable.has(exit.to)) return;
+                        reachable.add(exit.to);
+                        queue.push(exit.to);
+                    });
+                }
+                const stranded = Object.keys(MAPS).filter(id => !reachable.has(id));
+                if (stranded.length) throw new Error(`cannot be walked to: ${stranded.join(', ')}`);
+                return true;
+            });
+
+            runTest('Battle maths runs without a game around it', () => {
+                // The world's clock and weather live on a global the test page
+                // never creates. Reading them through currentClock() and
+                // currentWeather() keeps the rules testable on their own.
+                if (typeof gameState !== 'undefined') return 'a game exists, so this proves nothing';
+                if (currentClock() !== null) throw new Error('currentClock() invented a clock');
+                if (currentWeather() !== 'clear') throw new Error('currentWeather() invented weather');
+
+                const scene = { events: { emit: () => {} }, time: { delayedCall: () => {} } };
+                const battle = new BattleSystem(scene);
+                const result = battle.calculateDamage(new Monster('Fox', 20), new Monster('Owl', 20), getMove('Ember'));
+                if (!(result.damage > 0)) throw new Error('no damage without a running game');
+
+                battle.player = { getInventory: () => null };
+                battle.opponent = { isWild: true, team: [new Monster('Rat', 5)], index: 0 };
+                const chance = battle.catchChance('Monster Ball');
+                if (!(chance > 0 && chance <= 1)) throw new Error(`catch chance came out ${chance}`);
+                return true;
+            });
+
+            runTest('Nothing in the world reads as a shrine or a spirit', () => {
+                // A standing check on the tone the game was asked to keep. It
+                // reads every line of dialogue and every name in the region.
+                const banned = ['shrine', 'altar', 'idol', 'occult', 'spirit',
+                                'wraith', 'ghost', 'haunt', 'curse', 'demon',
+                                'ritual', 'omen', 'fortune', 'seance'];
+
+                const text = [];
+                Object.entries(MAPS).forEach(([id, def]) => {
+                    text.push(id, def.name);
+                    (def.npcs || []).forEach(npc => {
+                        text.push(...(npc.lines || []), ...(npc.afterGift || []));
+                        if (npc.trainer) {
+                            text.push(npc.trainer.title, ...(npc.trainer.intro || []),
+                                      ...(npc.trainer.defeat || []));
+                        }
+                    });
+                });
+                DEX_ORDER.forEach(name => text.push(name));
+                ROUTE_EVENTS.forEach(event => text.push(...event.lines, event.speaker || ''));
+
+                // Whole words only - "omen" lives inside "moment", and a
+                // substring match turns this into a nuisance rather than a guard
+                const found = [];
+                text.filter(Boolean).forEach(line => {
+                    banned.forEach(word => {
+                        if (new RegExp(`\\b${word}`, 'i').test(String(line))) {
+                            found.push(`"${word}" in "${line}"`);
+                        }
+                    });
+                });
+
+                if (found.length) throw new Error(found.slice(0, 3).join('; '));
+                return true;
+            });
+
+            runTest('Every town has somewhere to rest for nothing', () => {
+                // Healing is free everywhere and always has been; this keeps it
+                // that way if a shop is ever tempted to charge for it.
+                Object.entries(MAPS)
+                    .filter(([, def]) => def.kind === 'town')
+                    .forEach(([id, def]) => {
+                        const heals = (def.npcs || []).some(npc => npc.role === 'heal');
+                        if (!heals) throw new Error(`${id} has nowhere to rest`);
+                    });
+                return true;
+            });
+
+            runTest('A Burst is worth saving a full gauge for', () => {
+                if (!(CONFIG.BURST_MULTIPLIER > 1)) throw new Error('a Burst does no extra damage');
+                if (!(BattleSystem.MAX_MOMENTUM > 0)) throw new Error('the gauge has no size');
+                return true;
+            });
         }
 
         function runAllTests() {
@@ -458,21 +1291,34 @@
             document.getElementById('inventory-tests').innerHTML = '';
             document.getElementById('ui-tests').innerHTML = '';
             document.getElementById('audio-tests').innerHTML = '';
+            document.getElementById('systems-tests').innerHTML = '';
             document.getElementById('known-issues').innerHTML = '';
             
             // Load game files
             const scripts = [
+                '../js/utils/MathUtils.js',
+                '../js/utils/Rng.js',
                 '../js/config.js',
-                '../js/world/WorldGenerator.js',
+                '../js/data/Types.js',
+                '../js/data/Moves.js',
+                '../js/data/Species.js',
+                '../js/data/Maps.js',
+                '../js/data/Mentoring.js',
+                '../js/systems/WorldClock.js',
+                '../js/systems/Weather.js',
+                '../js/systems/RouteEvents.js',
+                '../js/world/TileTextures.js',
+                '../js/world/WorldMap.js',
                 '../js/entities/Monster.js',
                 '../js/entities/Player.js',
                 '../js/systems/Inventory.js',
                 '../js/systems/BattleSystem.js',
                 '../js/systems/EncounterSystem.js',
                 '../js/systems/AudioManager.js',
+                '../js/utils/SpriteFactory.js',
                 '../js/ui/Minimap.js',
-                '../js/ui/UIManager.js',
-                '../js/utils/SpriteGenerator.js'
+                '../js/ui/TouchControls.js',
+                '../js/ui/UIManager.js'
             ];
             
             let loaded = 0;
@@ -488,6 +1334,7 @@
                     testInventory();
                     testUI();
                     testAudio();
+                    testSystems();
                     checkKnownIssues();
                     return;
                 }
@@ -509,8 +1356,9 @@
             loadNext();
         }
 
-        // Auto-run tests on page load (after a delay to allow scripts to load)
-        setTimeout(runAllTests, 1000);
+        // window 'load' fires once the embedded game frame has loaded too, so
+        // the UI check has something real to inspect.
+        window.addEventListener('load', () => setTimeout(runAllTests, 300));
     </script>
 </body>
 </html>

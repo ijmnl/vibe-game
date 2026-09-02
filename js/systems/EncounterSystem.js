@@ -1,88 +1,91 @@
 class EncounterSystem {
     constructor(scene) {
         this.scene = scene;
-        this.worldGenerator = scene.worldGenerator;
         this.player = null;
         this.encounterCooldown = 0;
         this.encounterActive = false;
     }
 
-    // Initialize with player
     init(player) {
         this.player = player;
     }
 
-    // Update - check for encounters
+    get map() {
+        return this.scene.map;
+    }
+
     update(delta) {
         if (!this.player || this.encounterActive) return;
 
-        // Update cooldown
         if (this.encounterCooldown > 0) {
             this.encounterCooldown -= delta;
             return;
         }
 
-        // Check if player is moving
         if (!this.player.isMoving) return;
 
-        // Get player position and tile
-        const playerPos = this.player.getPosition();
-        const tileX = Math.floor(playerPos.x / CONFIG.TILE_SIZE);
-        const tileY = Math.floor(playerPos.y / CONFIG.TILE_SIZE);
-        const tile = this.worldGenerator.getTileAt(tileX, tileY);
+        // Encounters only happen on marked ground - tall grass, cave floor,
+        // the shoreline - so walking the path is a safe choice.
+        const tile = this.player.getTile();
+        const data = this.map.getTileAt(tile.x, tile.y);
+        if (!data || !data.encounter) return;
 
-        if (!tile) return;
-
-        // Get zone info
-        const zone = CONFIG.ZONES[tile.zone];
+        const zone = CONFIG.ZONES[this.map.zone];
         if (!zone || !zone.encounterRate) return;
 
-        // Check for encounter based on zone rate
-        if (Math.random() < zone.encounterRate * (delta / 1000)) {
-            this.triggerEncounter(tile.zone);
-        }
+        const chance = zone.encounterRate * CONFIG.ENCOUNTER_RATE_SCALE * (delta / 1000);
+        if (Math.random() < chance) this.triggerEncounter();
     }
 
-    // Trigger a random encounter
-    triggerEncounter(zoneType) {
-        // Set cooldown
+    // The context a route event checks itself against
+    eventContext() {
+        return {
+            coins: this.player.coins,
+            teamSize: this.player.getAllMonsters().length,
+            isNight: currentClock()?.isNight === true,
+            weather: currentWeather()
+        };
+    }
+
+    triggerEncounter(allowEvents = true) {
         this.encounterCooldown = CONFIG.ENCOUNTER_COOLDOWN;
+
+        // Not every rustle in the grass is a monster
+        if (allowEvents && Math.random() < ROUTE_EVENT_CHANCE) {
+            const event = rollRouteEvent(this.eventContext());
+            if (event) {
+                this.scene.events.emit('route-event', { event });
+                return;
+            }
+        }
+
         this.encounterActive = true;
 
-        // Create wild monster
-        const monsterName = getRandomMonsterForZone(zoneType);
-        const level = getRandomWildLevel();
-        
-        // Create monster (we'll use the battle system to create it properly)
-        const wildMonster = new Monster(this.scene, monsterName, level, true);
-        
-        // Show encounter notification
-        this.scene.events.emit('encounter-notification', {
-            monster: wildMonster
-        });
+        // After dark a route turns up a different set of monsters entirely,
+        // and they run a level hotter than their daytime counterparts.
+        const night = currentClock()?.isNight === true;
+        const level = this.map.getWildLevel() + (night ? 1 : 0);
+        const wildMonster = createWildMonster(this.map.zone, level, night);
 
-        // Start battle after notification
-        this.scene.time.delayedCall(1500, () => {
-            this.encounterActive = false;
-            this.scene.events.emit('encounter-start', {
-                player: this.player,
-                wildMonster: wildMonster,
-                zone: zoneType
-            });
+        this.scene.events.emit('encounter-notification', { monster: wildMonster });
+
+        // encounterActive stays true until the battle ends, so a second
+        // encounter cannot stack on this one.
+        this.scene.time.delayedCall(900, () => {
+            this.scene.events.emit('encounter-start', { player: this.player, wildMonster });
         });
     }
 
-    // Force an encounter (for testing)
-    forceEncounter(zoneType) {
-        this.triggerEncounter(zoneType || 'GRASS');
+    // Always a battle, never an event - the name has to mean what it says,
+    // or a test asking for a fight sometimes gets a pedlar instead.
+    forceEncounter() {
+        this.triggerEncounter(false);
     }
 
-    // Check if encounter is active
     isEncounterActive() {
         return this.encounterActive;
     }
 
-    // Set encounter active state
     setEncounterActive(active) {
         this.encounterActive = active;
     }
