@@ -50,13 +50,32 @@ def without(shape, *holes):
 # white chest or a pale tail tip still turns with the light.
 ACCENT_FOR = {'5': 'a', '2': 'a', '1': 'A', '3': 'B', '6': 'B', 'w': 'B'}
 
+# Every material is the same five tones under another set of letters, so a
+# jacket, a face and a boot all turn with the same light.
+MATERIALS = {
+    'accent':   {'5': 'a', '2': 'a', '1': 'A', '3': 'B', '6': 'B', 'w': 'B'},
+    # Trousers, like a shirt, are cloth: the accent ramp's brightest tone down
+    # the middle of two legs reads as a stripe painted on them.
+    'trousers': {'5': 'a', '2': 'a', '1': 'a', '3': 'A', '6': 'A', 'w': 'B'},
+    'skin':     {'5': 'c', '2': 'c', '1': 'C', '3': 'D', '6': 'D', 'w': 'D'},
+    'hair':     {'5': 'h', '2': 'h', '1': 'H', '3': 'I', '6': 'I', 'w': 'I'},
+    'boots':    {'5': 'k', '2': 'k', '1': 'k', '3': 'K', '6': 'K', 'w': 'L'},
+    # Cloth stretched over a body is not a polished ball. On a torso seven
+    # pixels across the lit middle of the ramp lands as one rounded patch in
+    # the belly, which reads as an apron; flattening the top of the ramp
+    # gives a plain tunic with a shaded rim, which is what cloth looks like.
+    'shirt':    {'w': '3', '6': '3', '3': '1', '1': '1', '2': '2', '5': '5'},
+}
 
-def mark(region):
+
+def mark(region, material='accent'):
+    table = MATERIALS[material]
+
     def apply(grid):
         for y in range(N):
             for x in range(N):
-                if grid[y][x] in ACCENT_FOR and region(x + 0.5, y + 0.5):
-                    grid[y][x] = ACCENT_FOR[grid[y][x]]
+                if grid[y][x] in table and region(x + 0.5, y + 0.5):
+                    grid[y][x] = table[grid[y][x]]
     return apply
 
 
@@ -118,7 +137,8 @@ def mouth(grid, x, y, width):
             grid[py][px] = 'e'
 
 
-def render(inside, *, style='house', floor=None, face=None, specular=(), markings=()):
+def render(inside, *, style='house', floor=None, face=None, specular=(), markings=(),
+           roundness=1.0, lift=0.0):
     """style: 'house' - the one the game uses: five tones, one heavy outline
               'soft' - the same shading with a thin outline
               'chunky' - three tones, doubled outline
@@ -180,9 +200,20 @@ def render(inside, *, style='house', floor=None, face=None, specular=(), marking
             # Weighted so the base tone is what most of the body lands on and
             # the light reads as a highlight rather than as the norm.
             # The +1.2 keeps thin parts - ears, fins, claws - from bottoming
-            # out at the darkest tone just for being narrow
+            # out at the darkest tone just for being narrow.
+            #
+            # `roundness` is how much the middle of a mass lifts toward the
+            # light. A creature is round and wants all of it; a shirt is flat,
+            # and at full strength the middle of a torso comes out as a pale
+            # bib rather than as cloth.
             body = min((depth[y][x] + 1.2) / 5.2, 1.0)
-            level = body * 0.40 + (facing * 0.5 + 0.5) * 0.46
+            #
+            # `lift` raises the whole sprite up the ramp. A creature is one
+            # big mass and finds the middle of the ramp on its own; a person
+            # is a stack of parts none of which is more than seven pixels
+            # across, so without a lift every one of them shades as an edge
+            # and the whole figure comes out in the two darkest tones.
+            level = body * 0.40 * roundness + (facing * 0.5 + 0.5) * 0.46 + lift
 
             step = min(len(tones) - 1, max(0, int(level * len(tones))))
             grid[y][x] = tones[step]
@@ -272,6 +303,9 @@ def palette(base, dark, light, accent_mid, outline=None):
     white = (255, 255, 255)
     return {
         '.': None,
+        'c': (186, 132, 90), 'C': (242, 196, 140), 'D': (255, 228, 190),
+        'h': (74, 42, 18), 'H': (122, 72, 32), 'I': (168, 110, 60),
+        'k': (58, 42, 34), 'K': (92, 66, 50), 'L': (128, 96, 74),
         'o': outline or mix(dark, black, 0.62),
         '5': mix(dark, black, 0.28),
         '2': dark,
@@ -308,6 +342,15 @@ PREVIEW = {
     'a': (176, 132, 96),
     'A': (232, 198, 158),
     'B': (255, 244, 226),
+    'c': (186, 132, 90),
+    'C': (242, 196, 140),
+    'D': (255, 228, 190),
+    'h': (74, 42, 18),
+    'H': (122, 72, 32),
+    'I': (168, 110, 60),
+    'k': (58, 42, 34),
+    'K': (92, 66, 50),
+    'L': (128, 96, 74),
 }
 
 
