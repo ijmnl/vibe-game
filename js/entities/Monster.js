@@ -309,9 +309,17 @@ class Monster {
     evolveInto(name) {
         // Evolution can bring new moves; they arrive with full PP below
         const hpRatio = this.hp / this.maxHp;
+        const species = getSpecies(name);
 
         this.name = name;
-        this.type = getSpecies(name).type;
+        this.type = species.type;
+        this.secondType = species.type2 || null;
+        // The new form's base line is the whole point of evolving - keeping
+        // the old one left an evolved monster weaker than one caught at the
+        // same level.
+        this.baseStats = { ...species.stats };
+        this.legendary = !!species.legendary;
+
         this.recalculateStats();
         this.hp = Math.max(1, Math.round(this.maxHp * hpRatio));
 

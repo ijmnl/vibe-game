@@ -10,6 +10,7 @@ class BattleScene extends Phaser.Scene {
         this.uiManager = null;
         this.enemyView = null;
         this.playerView = null;
+        this.banner = null;
     }
 
     init(data) {
@@ -50,7 +51,11 @@ class BattleScene extends Phaser.Scene {
             this.time.delayedCall(delay, () => this.layoutScene()));
 
         this.scale.on('resize', this.handleResize, this);
-        this.events.once('shutdown', () => this.scale.off('resize', this.handleResize, this));
+        this.events.once('shutdown', () => {
+            this.scale.off('resize', this.handleResize, this);
+            this.banner?.destroy();
+            this.banner = null;
+        });
     }
 
     createBackground() {
@@ -455,10 +460,7 @@ class BattleScene extends Phaser.Scene {
             'monster-levelup': (data) => this.showLevelUp(data),
             'battle-held-on': (data) => this.showHeldOn(data),
             'battle-bond': () => this.floatText('\u2665', '#ff6b8a'),
-            'monster-evolved': (data) => {
-                this.swapPlayerMonsterView();
-                this.showEvolution(data);
-            }
+            'monster-evolved': (data) => this.showEvolution(data)
         };
 
         Object.entries(handlers).forEach(([event, handler]) => worldEvents.on(event, handler));
@@ -468,7 +470,9 @@ class BattleScene extends Phaser.Scene {
         });
     }
 
-    // Levelling is easy to miss in the log, so say it on screen
+    // A level-up used to be a small label that faded out over the monster's
+    // own name. It is now a banner across the arena, and the results panel
+    // holds the fight open long enough for it to be read.
     showLevelUp({ monster, level }) {
         if (!this.playerView) return;
 
@@ -478,11 +482,166 @@ class BattleScene extends Phaser.Scene {
         }
 
         audioManager.playSfx('victory');
-        this.floatText(`Lv.${level}!`, '#f6d02c');
+        this.showBanner(`LEVEL UP!  Lv.${level}`, '#f6d02c');
+
+        // A ring of light off the monster itself, so the banner is not the
+        // only thing that says which one grew
+        const sprite = this.playerView.sprite;
+        const ring = this.add.ellipse(sprite.x, sprite.y, sprite.displayWidth * 1.1,
+                                      sprite.displayHeight * 0.5, 0xf6d02c, 0);
+        ring.setStrokeStyle(3, 0xf6d02c, 0.9);
+        ring.setDepth(39);
+
+        this.tweens.add({
+            targets: ring,
+            scaleX: 2.1,
+            scaleY: 2.1,
+            alpha: 0,
+            duration: 780,
+            ease: 'Quad.easeOut',
+            onComplete: () => ring.destroy()
+        });
+
+        this.tweens.add({
+            targets: sprite,
+            scale: { from: sprite.scale, to: sprite.scale * 1.14 },
+            duration: 220,
+            yoyo: true,
+            ease: 'Sine.easeInOut'
+        });
     }
 
+    // The classic transformation: the monster goes to a white silhouette and
+    // flickers between its old shape and its new one, faster and faster,
+    // then bursts. BattleSystem holds the turn for 1.9s, which this fills.
     showEvolution({ from }) {
-        this.floatText(`${from} evolved!`, '#7fc4ff');
+        const view = this.playerView;
+        const mine = this.player.getCurrentMonster();
+
+        if (!view || !mine) {
+            this.swapPlayerMonsterView();
+            return;
+        }
+
+        const sprite = view.sprite;
+        const before = sprite.texture.key;
+        const after = mine.getSpriteKey();
+        const baseScale = sprite.scale;
+
+        sprite.setTintFill(0xffffff);
+        audioManager.playSfx('heal');
+
+        // Alternate between the two silhouettes on a shortening beat
+        const beats = [190, 175, 155, 135, 115, 95, 80, 70, 60, 55];
+        let elapsed = 0;
+
+        beats.forEach((gap, index) => {
+            elapsed += gap;
+            this.time.delayedCall(elapsed, () => {
+                if (!sprite.active) return;
+                sprite.setTexture(index % 2 === 0 ? after : before);
+                sprite.setTintFill(0xffffff);
+                sprite.setScale(baseScale * (1 + index * 0.012));
+            });
+        });
+
+        this.time.delayedCall(elapsed + 90, () => {
+            if (!sprite.active) return;
+
+            this.cameras.main.flash(320, 255, 255, 255);
+            audioManager.playSfx('victory');
+
+            // Rebuild the view so the label, size and platform all match the
+            // new form rather than being patched onto the old one
+            this.swapPlayerMonsterView();
+            this.burstSparkles(this.playerView);
+            this.showBanner(`${from} evolved into ${mine.name}!`, '#7fc4ff');
+
+            const grown = this.playerView?.sprite;
+            if (grown) {
+                this.tweens.add({
+                    targets: grown,
+                    scale: { from: grown.scale * 0.55, to: grown.scale },
+                    duration: 420,
+                    ease: 'Back.easeOut'
+                });
+            }
+        });
+    }
+
+    // A short shower of light off a sprite, used when something transforms
+    burstSparkles(view) {
+        if (!view) return;
+
+        const { x, y } = view.sprite;
+
+        for (let i = 0; i < 14; i++) {
+            const angle = (Math.PI * 2 * i) / 14;
+            const spark = this.add.rectangle(x, y, 4, 4, 0xffffff, 1);
+            spark.setDepth(41);
+
+            this.tweens.add({
+                targets: spark,
+                x: x + Math.cos(angle) * Phaser.Math.Between(38, 66),
+                y: y + Math.sin(angle) * Phaser.Math.Between(38, 66),
+                alpha: 0,
+                scale: 0.2,
+                duration: Phaser.Math.Between(420, 680),
+                ease: 'Quad.easeOut',
+                onComplete: () => spark.destroy()
+            });
+        }
+    }
+
+    // One line across the arena, plated so it reads over any backdrop
+    showBanner(message, color) {
+        this.banner?.destroy();
+
+        // High in the visible strip, clear of both combatants and the panel
+        const panel = this.getPanelBounds();
+        const beside = panel.left > this.scale.width * 0.3;
+        const centerX = beside ? panel.left / 2 : this.scale.width / 2;
+        const y = Math.max(26, this.visibleHeight() * 0.16);
+
+        const banner = this.add.container(centerX, y);
+        banner.setDepth(45);
+
+        const label = this.add.text(0, 0, message, {
+            fontFamily: 'monospace',
+            fontSize: '15px',
+            color,
+            stroke: '#000000',
+            strokeThickness: 5
+        }).setOrigin(0.5, 0.5);
+
+        const plate = this.add.rectangle(0, 0, label.width + 28, label.height + 14, 0x120f1c, 0.82);
+        plate.setStrokeStyle(2, Phaser.Display.Color.HexStringToColor(color).color, 0.9);
+
+        banner.add([plate, label]);
+        banner.setScale(0.7);
+        banner.setAlpha(0);
+        this.banner = banner;
+
+        this.tweens.add({
+            targets: banner,
+            scale: 1,
+            alpha: 1,
+            duration: 220,
+            ease: 'Back.easeOut'
+        });
+
+        this.tweens.add({
+            targets: banner,
+            alpha: 0,
+            y: y - 14,
+            delay: 1500,
+            duration: 400,
+            ease: 'Quad.easeIn',
+            onComplete: () => {
+                if (this.banner === banner) this.banner = null;
+                banner.destroy();
+            }
+        });
     }
 
     // A monster digging in at 1 HP is the single most dramatic thing that
@@ -708,7 +867,8 @@ class BattleScene extends Phaser.Scene {
         const messages = {
             win: data.opponent && !data.opponent.isWild ? 'You won the battle!' : 'Victory!',
             catch: 'Caught it!',
-            'catch-full': 'Caught it, but your team is full!',
+            'catch-stored': 'Caught it! Your team was full, so it is waiting at the ranch.',
+            'catch-full': 'Caught it, but your team and the ranch are both full!',
             run: 'Got away safely.'
         };
 
@@ -716,7 +876,7 @@ class BattleScene extends Phaser.Scene {
             worldScene.uiManager.showMessage(messages[data.result], 1800);
         }
 
-        if (data.result === 'win' || data.result === 'catch') {
+        if (data.result === 'win' || data.result === 'catch' || data.result === 'catch-stored') {
             audioManager.playSfx('victory');
             worldScene.uiManager.checkDexCompletion();
         }

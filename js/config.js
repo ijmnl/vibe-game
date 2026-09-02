@@ -25,6 +25,9 @@ const CONFIG = {
     
     // Battle settings
     MAX_MONSTERS_IN_TEAM: 6,
+    // Anything caught past a full team goes to the ranch instead of being
+    // lost. Swap between the two from the menu, outside of a battle.
+    MAX_MONSTERS_IN_RANCH: 30,
     // Divisor in the damage formula - lower hits harder. Tuned so a neutral
     // hit costs about a fifth of a health bar, which leaves room for type
     // advantage and crits to matter without one-shotting anything.

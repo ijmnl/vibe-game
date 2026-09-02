@@ -32,8 +32,12 @@ class UIManager {
             main: document.getElementById('battle-main'),
             moves: document.getElementById('battle-moves'),
             items: document.getElementById('battle-items'),
-            team: document.getElementById('battle-team')
+            team: document.getElementById('battle-team'),
+            result: document.getElementById('battle-result')
         };
+        this.resultTitle = document.getElementById('result-title');
+        this.resultLines = document.getElementById('result-lines');
+        this.resultTimer = null;
         this.battleItemList = document.getElementById('battle-item-list');
         this.battleTeamList = document.getElementById('battle-team-list');
 
@@ -41,6 +45,10 @@ class UIManager {
         this.itemList = document.getElementById('item-list');
         this.shopList = document.getElementById('shop-list');
         this.dexList = document.getElementById('dex-list');
+        this.ranchUI = document.getElementById('ranch-ui');
+        this.ranchList = document.getElementById('ranch-list');
+        this.ranchTeamList = document.getElementById('ranch-team-list');
+        this.ranchPick = null;   // index of the team member awaiting a swap
         this.coinCounters = document.querySelectorAll('.coin-count');
 
         this.momentumFill = document.getElementById('momentum-fill');
@@ -91,6 +99,9 @@ class UIManager {
         on('close-shop-btn', () => this.closeShop());
         on('close-dex-btn', () => this.hideDex());
         on('dex-btn', () => this.showDex());
+        on('close-ranch-btn', () => this.hideRanch());
+        on('ranch-btn', () => this.showRanch());
+        on('result-continue-btn', () => this.dismissBattleResult());
         on('mute-btn', () => this.toggleMute());
 
         touchControls.onMenu = () => this.toggleMenu();
@@ -122,9 +133,18 @@ class UIManager {
         events.on('battle-monster-switch', () => this.updateBattleBars());
         events.on('battle-monster-faint', () => this.updateBattleBars());
         events.on('monster-evolved', () => this.updateBattleBars());
+        events.on('battle-spoils', (data) => this.showBattleResult(data));
         events.on('encounter-notification', (data) => this.showEncounterNotification(data));
 
         document.addEventListener('keydown', (e) => {
+            // The results panel owns the keyboard while it is up, so a win
+            // can be dismissed without reaching for the mouse
+            if (this.isResultOpen() && (e.key === ' ' || e.key === 'Enter')) {
+                e.preventDefault();
+                this.dismissBattleResult();
+                return;
+            }
+
             if (e.key === 'Escape' || e.key === 'm' || e.key === 'M') this.toggleMenu();
         });
     }
@@ -190,6 +210,12 @@ class UIManager {
     }
 
     hideBattleUI() {
+        // A battle that ends some other way (a catch, a run) must not leave
+        // awardSpoils waiting on a panel nobody can see any more
+        if (this.isResultOpen()) this.dismissBattleResult();
+
+        clearTimeout(this.resultTimer);
+        this.resultTimer = null;
         this.battleUI.classList.add('hidden');
         this.setWorldHudVisible(true);
     }
@@ -369,6 +395,195 @@ class UIManager {
         if (!this.playerExp) return;
         this.playerExp.classList.add('gained');
         setTimeout(() => this.playerExp.classList.remove('gained'), 900);
+    }
+
+    // --- the results panel --------------------------------------------------
+
+    isResultOpen() {
+        return this.battlePanels.result && !this.battlePanels.result.classList.contains('hidden');
+    }
+
+    // Shown the moment a fight is won, and the reason a level-up is now
+    // readable: the battle does not close until this is dismissed.
+    showBattleResult(spoils) {
+        if (!this.battlePanels.result) {
+            this.scene.events.emit('battle-continue');
+            return;
+        }
+
+        const events = spoils.events || [];
+        const levels = events.filter(event => event.kind === 'level-up');
+        const learned = events.filter(event => event.kind === 'move-learned');
+        const evolved = events.filter(event => event.kind === 'evolved');
+        const monster = spoils.monster;
+
+        const lines = [];
+        if (spoils.coins) lines.push(['Coins', `+${spoils.coins}`]);
+        if (spoils.exp) lines.push(['EXP', `+${spoils.exp}`]);
+        if (spoils.hearts) lines.push(['Bond', '\u2665'.repeat(spoils.hearts)]);
+
+        evolved.forEach(event => lines.push(['Evolved', `${event.from} \u2192 ${event.to}`, 'shout']));
+
+        if (levels.length && monster) {
+            lines.push(['Level up',
+                `Lv.${spoils.levelBefore} \u2192 Lv.${monster.level}`, 'shout']);
+        }
+
+        learned.forEach(event => lines.push([
+            'Learned',
+            event.forgotten ? `${event.move} (forgot ${event.forgotten})` : event.move
+        ]));
+
+        this.resultTitle.textContent = levels.length || evolved.length
+            ? `${monster ? monster.name : 'Your monster'} grew stronger!`
+            : `${spoils.name} was defeated`;
+
+        this.resultLines.innerHTML = lines.map(([label, value, tone]) => `
+            <div class="result-line${tone ? ' ' + tone : ''}">
+                <span class="result-label muted">${label}</span>
+                <span class="result-value">${value}</span>
+            </div>
+        `).join('');
+
+        // Progress toward the next level, filled from empty so the bar is
+        // seen moving rather than found already full
+        if (monster) {
+            const percent = Math.min(100, (monster.exp / monster.expToLevel) * 100);
+            this.resultLines.insertAdjacentHTML('beforeend', `
+                <div class="result-exp">
+                    <div class="exp-bar"><div class="exp-fill" style="width:0%"></div></div>
+                    <span class="muted">${monster.exp}/${monster.expToLevel} to Lv.${monster.level + 1}</span>
+                </div>
+            `);
+            const fill = this.resultLines.querySelector('.result-exp .exp-fill');
+            requestAnimationFrame(() => { if (fill) fill.style.width = `${percent}%`; });
+        }
+
+        this.showBattlePanel('result');
+        this.updateBattleBars();
+
+        // Something worth reading waits for a tap; a plain win gets out of
+        // the way on its own so grinding never turns into button-mashing.
+        const notable = levels.length || evolved.length || learned.length;
+        clearTimeout(this.resultTimer);
+        if (!notable) {
+            this.resultTimer = setTimeout(() => this.dismissBattleResult(), 1500);
+        }
+    }
+
+    dismissBattleResult() {
+        if (!this.isResultOpen()) return;
+
+        clearTimeout(this.resultTimer);
+        this.resultTimer = null;
+        this.showBattlePanel('main');
+        this.scene.events.emit('battle-continue');
+    }
+
+    // --- the ranch ----------------------------------------------------------
+
+    showRanch() {
+        if (this.scene.battleSystem?.isActive()) return;
+
+        this.ranchPick = null;
+        this.ranchUI.classList.remove('hidden');
+        this.setWorldHudVisible(false);
+        this.renderRanch();
+        touchControls.reset();
+    }
+
+    hideRanch() {
+        this.ranchUI.classList.add('hidden');
+        this.ranchPick = null;
+        // The menu is still open underneath, so keep the HUD hidden
+        this.renderTeamList();
+        saveGame();
+    }
+
+    renderRanch() {
+        const player = this.scene.player;
+        const ranch = player.getRanch();
+        const team = player.getAllMonsters();
+        const teamFull = team.length >= CONFIG.MAX_MONSTERS_IN_TEAM;
+
+        document.getElementById('ranch-count').textContent =
+            `${ranch.length} / ${CONFIG.MAX_MONSTERS_IN_RANCH} boarded`;
+
+        document.getElementById('ranch-hint').textContent = this.ranchPick !== null
+            ? `Pick who ${team[this.ranchPick].name} trades places with, or tap it again to cancel.`
+            : teamFull
+                ? 'Your team is full. Tap one of yours, then one at the ranch, to trade them over.'
+                : 'Tap anyone at the ranch to bring them along.';
+
+        this.ranchTeamList.innerHTML = '';
+        team.forEach((monster, index) => {
+            const row = this.buildRanchRow(monster,
+                index === this.ranchPick ? 'Cancel' : (teamFull ? 'Trade' : 'Board'));
+            if (index === this.ranchPick) row.classList.add('active');
+
+            row.addEventListener('click', () => {
+                if (this.ranchPick === index) {
+                    this.ranchPick = null;
+                } else if (!teamFull) {
+                    if (!player.depositMonster(index)) return;
+                    audioManager.playSfx('buy');
+                } else {
+                    this.ranchPick = index;
+                }
+                this.renderRanch();
+            });
+
+            this.ranchTeamList.appendChild(row);
+        });
+
+        this.ranchList.innerHTML = '';
+        if (!ranch.length) {
+            this.ranchList.innerHTML =
+                '<div class="empty-note muted">Nobody is boarding here yet. ' +
+                'Anything you catch with a full team turns up in this list.</div>';
+        }
+
+        ranch.forEach((monster, index) => {
+            const row = this.buildRanchRow(monster, this.ranchPick !== null ? 'Swap' : 'Take');
+
+            row.addEventListener('click', () => {
+                if (this.ranchPick !== null) {
+                    if (!player.swapWithRanch(this.ranchPick, index)) return;
+                    this.ranchPick = null;
+                } else if (!player.withdrawMonster(index)) {
+                    return;
+                }
+
+                audioManager.playSfx('buy');
+                this.renderRanch();
+            });
+
+            this.ranchList.appendChild(row);
+        });
+
+        this.paintAvatars(this.ranchTeamList);
+        this.paintAvatars(this.ranchList);
+    }
+
+    buildRanchRow(monster, action) {
+        const row = document.createElement('div');
+        row.className = 'monster-row selectable';
+
+        const percent = (monster.hp / monster.maxHp) * 100;
+        row.innerHTML = `
+            <div class="monster-avatar" data-key="${monster.getSpriteKey()}"></div>
+            <div class="monster-info">
+                <div class="monster-title">
+                    <span>${monster.name}</span>
+                    <span class="muted">Lv.${monster.level}</span>
+                </div>
+                <div class="health-bar small"><div class="health-fill" style="width:${percent}%"></div></div>
+                <div class="monster-sub muted">${monster.typeLabel} &middot; ${monster.hp}/${monster.maxHp} HP</div>
+            </div>
+            <span class="row-action">${action}</span>
+        `;
+
+        return row;
     }
 
     updateBattleLog(log) {
@@ -907,7 +1122,7 @@ class UIManager {
 
     // True while any full-screen panel is up, so the world ignores input
     isOverlayOpen() {
-        return [this.menuUI, this.shopUI, this.dexUI, this.battleUI, this.mentorUI]
+        return [this.menuUI, this.shopUI, this.dexUI, this.ranchUI, this.battleUI, this.mentorUI]
             .some(panel => panel && !panel.classList.contains('hidden'));
     }
 

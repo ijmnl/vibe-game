@@ -826,3 +826,119 @@ mensen worden op één rastercel per beeldpunt geschilderd, dus de speler en de
 dorpelingen kosten precies evenveel als voorheen.
 
 78 tests, 0 gefaald.
+
+---
+
+# Ronde 3 — na het spelen
+
+Drie klachten uit het spelen zelf, en de camerazoom die eronder lag.
+
+## Het gevecht sloot te snel af om de level-up te zien
+
+De level-up werd wel getoond: een klein zwevend label boven het monster, 1200 ms
+lang, over zijn eigen naamplaatje heen. Daarna riep `endBattle()` meteen
+`scene.stop()` aan. Wie op het scherm keek in plaats van in het logboek zag er
+niets van.
+
+Een gewonnen gevecht eindigt nu op een resultatenpaneel: munten, EXP, een
+EXP-balk die van nul vult, en de level-up of evolutie uitgeschreven. Het paneel
+houdt het gevecht open — `BattleSystem.presentSpoils()` wacht op een
+`battle-continue`-event dat pas komt als er getikt (of op spatie/enter gedrukt)
+wordt. Gebeurde er niets bijzonders, dan ruimt het zichzelf na 1,5 seconde op,
+zodat grinden geen knoppenwerk wordt. De level-up zelf is nu een banner over de
+arena met een lichtring om het monster in plaats van een zwevend labeltje.
+
+## Evolueren
+
+Het gebeurde wél, maar het leverde niets op. `Monster.recalculateStats()` leest
+`this.baseStats`, dat bij de constructor wordt vastgelegd, en `evolveInto()`
+verving alleen `name` en `type`. Een Rattler die uit een Rat groeide bleef dus op
+de basiswaarden van een Rat staan:
+
+| Rattler, level 50 | HP | Aanval |
+|---|---|---|
+| Uit een Rat gegroeid (voor) | 309 | 72 |
+| Zelfde soort, gevangen | 430 | 126 |
+| Uit een Rat gegroeid (na) | 430 | 126 |
+
+`evolveInto()` neemt nu de basiswaarden, het tweede type en de legendarische
+vlag van de nieuwe soort over. Er zit ook een animatie op: het monster wordt een
+wit silhouet en flikkert tussen zijn oude en nieuwe vorm op een steeds korter
+ritme, dan een flits, een lichtregen en de nieuwe vorm die opveert.
+
+## Zes beesten, en dan niets meer
+
+`catchMonster()` gaf `{ success: false }` zodra het team vol was — nadat het de
+soort al in de Monsterdex had gezet. De vangst lukte, het monster verdween.
+
+Er is nu een ranch: alles boven de zes gaat daarheen (dertig plekken), en het
+menu heeft een **Ranch**-scherm om te wisselen. Met ruimte in het team haal je er
+iemand uit; met een vol team tik je eerst een van je eigen monsters aan en dan
+een van de ranch om ze te ruilen. De laatste in het team kan niet worden
+gestald, want dan is er geen weg terug uit een verloren gevecht. De verpleegster
+geneest de ranch mee, en cadeaus van NPC's en de zwerver op de route lopen langs
+dezelfde weg — een vol team is nergens meer een reden om iets mis te lopen.
+Oude saves zonder `ranch`-veld laden gewoon met een lege ranch.
+
+## De camerazoom sleepte de pixel art mee omlaag
+
+`getCameraZoom()` gaf `shortest / 416`, geklemd tussen 1 en 3 — op een scherm van
+700 px is dat 1,68. Bij een gebroken zoomfactor wordt elke getekende pixel
+ongelijk uitgesmeerd: de een beslaat één schermpixel, zijn buurman twee. De
+tegels overleven dat omdat hun detail grof is; de mensen, op één rastercel per
+beeldpunt, niet. De zoom wordt nu op hele getallen afgerond.
+
+85 tests, 0 gefaald.
+
+---
+
+# Ronde 4 — de poppetjes opnieuw getekend
+
+Stijl B gekozen: pet, riem, en een figuur die een kwart tegel boven de grond
+uitsteekt.
+
+## Waarom het raster grover moest
+
+De oude figuur stond op een raster van 32x32 met **één** beeldpunt per
+getekende pixel. De tegels eromheen hebben korrel van twee tot vier beeldpunten,
+dus het poppetje was fijner getekend dan de wereld waarin het stond — en las
+daardoor als een klein plaatje van een mens in plaats van als pixel art.
+
+Nu: **16 breed x 20 hoog, twee beeldpunten per getekende pixel**. Even breed als
+een tegel, en een kwart tegel hoger dan de grond waarop het staat. De textuur
+groeide van 32x32 naar 32x40 per frame.
+
+| | voor | na |
+|---|---|---|
+| Raster | 32 x 32 | 16 x 20 |
+| Beeldpunten per pixel | 1 | 2 |
+| Textuur per frame | 32 x 32 | 32 x 40 |
+| Kleuren in het figuur | 22 | 14 |
+
+## De voeten blijven staan waar ze stonden
+
+Het figuur is hoger dan een tegel, maar niets in het spel mocht daarvan weten.
+`PERSON_ORIGIN_Y = 0.6` zet het ankerpunt zo dat de voeten precies landen waar de
+onderkant van een tegelgroot poppetje lag. Botsingen, dieptesortering, spawnpunten
+en de wandelroutes van de dorpelingen zijn allemaal onveranderd; alleen het
+uitroepteken van een trainer moest tien pixels omhoog om boven de pet uit te komen.
+
+## Eén set tekeningen, met en zonder pet
+
+De pet zit in eigen paletsleuven (`p P Q`) in plaats van in de kleuren van het
+shirt. Een outfit met een `hat` krijgt daar de pet in; een outfit zonder krijgt er
+zijn eigen haarkleur in, waardoor dezelfde rijen als een volle haardos lezen. Zo
+tekenen negen rasters de hele cast: de speler, de rivaal en de trainers met pet,
+de 27 dorpelingen zonder. De riem heeft op dezelfde manier een eigen sleuf
+(`r R`), zodat hij niet meeverft met de broek.
+
+## Twaalf frames
+
+Vier richtingen x drie frames (staan, passen, sluiten), waarvan `right` een
+spiegeling van `left` is. De zijaanzichten zijn echt profiel getekend — smaller
+hoofd, klep naar voren, haar aan de achterkant, één oog — in plaats van het
+vooraanzicht met de ogen verschoven. Het extra beenwerk paste doordat er een
+romprij is samengevoegd; drie rijen been maken een pas leesbaar waar twee dat
+niet deden.
+
+89 tests, 0 gefaald.

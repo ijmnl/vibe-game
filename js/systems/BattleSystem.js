@@ -484,7 +484,10 @@ class BattleSystem {
 
         const result = this.player.catchMonster(this.wildMonster);
 
-        if (result.success) {
+        if (result.success && result.stored) {
+            this.addToLog(`Gotcha! ${this.wildMonster.name} went to the ranch.`);
+            this.endBattle('catch-stored');
+        } else if (result.success) {
             this.addToLog(`Gotcha! ${this.wildMonster.name} was caught!`);
             this.endBattle('catch');
         } else {
@@ -703,28 +706,41 @@ class BattleSystem {
         const monster = this.player.getCurrentMonster();
         const wild = defeated || this.wildMonster;
 
+        // What the results panel will show once the dust settles
+        const spoils = { name: wild.name, coins: 0, exp: 0, monster, events: [] };
+
         // Wild monsters drop coins themselves; a trainer pays once, at the end
         if (this.opponent.isWild) {
             const coins = CONFIG.COINS_PER_WIN_BASE + wild.level * CONFIG.COINS_PER_WIN_PER_LEVEL;
             this.player.addCoins(coins);
             this.addToLog(`You found ${coins} coins!`);
+            spoils.coins = coins;
         }
 
-        if (!monster || !monster.isAlive()) return;
+        if (!monster || !monster.isAlive()) {
+            await this.presentSpoils(spoils);
+            return;
+        }
 
         const trainerBonus = this.opponent.isWild ? 1 : 1.5;
         const gained = Math.floor(getSpecies(wild.name).exp * wild.level * trainerBonus / 4) + 5;
         this.addToLog(`${monster.name} gained ${gained} EXP.`);
+        spoils.exp = gained;
 
         // Fighting alongside you is what builds the bond
         const heart = monster.addBond(wild.level >= monster.level ? 6 : 3);
         if (heart) {
             this.addToLog(`${monster.name} feels closer to you. (${'\u2665'.repeat(heart)})`);
             this.scene.events.emit('battle-bond', { monster, hearts: heart });
+            spoils.hearts = heart;
         }
 
+        const levelBefore = monster.level;
         const events = monster.gainExp(gained);
+        spoils.events = events;
+        spoils.levelBefore = levelBefore;
         this.scene.events.emit('battle-exp', { monster, gained });
+
         for (const event of events) {
             if (event.kind === 'level-up') {
                 this.addToLog(`${monster.name} grew to Lv.${event.level}!`);
@@ -740,11 +756,35 @@ class BattleSystem {
             }
 
             // Levelling and evolving deserve a beat to actually be seen
-            const pause = event.kind === 'level-up' ? 1200
-                : event.kind === 'evolved' ? 1800
-                : 900;
+            const pause = event.kind === 'level-up' ? 1000
+                : event.kind === 'evolved' ? 1900
+                : 800;
             await this.wait(pause);
         }
+
+        await this.presentSpoils(spoils);
+    }
+
+    // The fight used to close on the same frame the level-up text appeared,
+    // so nobody ever saw it. Now the win ends on a results panel: it holds
+    // by itself when something worth reading happened, and gets out of the
+    // way after a beat when nothing did.
+    async presentSpoils(spoils) {
+        const events = this.scene.events;
+        if (!events.listenerCount || !events.listenerCount('battle-spoils')) return;
+
+        await new Promise(resolve => {
+            let settled = false;
+            const finish = () => {
+                if (settled) return;
+                settled = true;
+                events.off('battle-continue', finish);
+                resolve();
+            };
+
+            events.once('battle-continue', finish);
+            events.emit('battle-spoils', spoils);
+        });
     }
 
     endBattle(result) {

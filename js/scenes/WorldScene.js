@@ -172,6 +172,8 @@ class WorldScene extends Phaser.Scene {
                 npc.y * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 2,
                 npc.sprite || 'npc-elder'
             );
+            // Same footing as the player: taller than a tile, standing on it
+            sprite.setOrigin(0.5, SpriteFactory.PERSON_ORIGIN_Y);
             sprite.setDepth(9);
             this.npcSprites.push({ npc, sprite });
         });
@@ -311,11 +313,14 @@ class WorldScene extends Phaser.Scene {
         camera.setZoom(this.getCameraZoom());
     }
 
+    // Whole-number zoom only. A fractional one (1.68 on a phone) resamples
+    // the art: some drawn pixels land on two screen pixels and the ones
+    // beside them on one, which is what made the pixel art look smeared.
     getCameraZoom() {
         const tilesAcross = 13;
         const shortest = Math.min(this.scale.width, this.scale.height);
 
-        return clamp(shortest / (tilesAcross * CONFIG.TILE_SIZE), 1, 3);
+        return clamp(Math.round(shortest / (tilesAcross * CONFIG.TILE_SIZE)), 1, 3);
     }
 
     handleResize() {
@@ -411,20 +416,23 @@ class WorldScene extends Phaser.Scene {
         });
     }
 
-    // A one-off monster handed over by an NPC
+    // A one-off monster handed over by an NPC. A full team is no longer a
+    // reason to turn one down - it boards at the ranch instead.
     giveGift(npc, giftKey) {
         const [name, level] = npc.gift;
+        const result = this.player.catchMonster(new Monster(name, level));
 
-        if (this.player.getAllMonsters().length >= CONFIG.MAX_MONSTERS_IN_TEAM) {
-            this.uiManager.showMessage('Your team is full - come back with room!', 2600);
+        if (!result.success) {
+            this.uiManager.showMessage(result.reason, 2600);
             return;
         }
 
-        this.player.addMonster(name, level);
         gameState.receivedGifts.push(giftKey);
 
         this.uiManager.refreshHud();
-        this.uiManager.showMessage(`You received ${name} (Lv.${level})!`, 3000);
+        this.uiManager.showMessage(result.stored
+            ? `You received ${name} (Lv.${level})! It is waiting at the ranch.`
+            : `You received ${name} (Lv.${level})!`, 3000);
         audioManager.playSfx('caught');
         saveGame();
     }
@@ -523,7 +531,9 @@ class WorldScene extends Phaser.Scene {
 
         audioManager.playSfx('caught');
         this.uiManager.refreshHud();
-        this.uiManager.showMessage(`${stray.name} (Lv.${stray.level}) joined you!`, 3200);
+        this.uiManager.showMessage(result.stored
+            ? `${stray.name} (Lv.${stray.level}) joined you, and went on to the ranch.`
+            : `${stray.name} (Lv.${stray.level}) joined you!`, 3200);
         this.uiManager.checkDexCompletion();
     }
 
@@ -682,7 +692,8 @@ class WorldScene extends Phaser.Scene {
 
         // "!" over their head, then they walk over
         if (entry) {
-            const mark = this.add.text(entry.sprite.x, entry.sprite.y - 22, '!', {
+            // Clear of the cap: the figure stands 40px tall on a 32px tile
+            const mark = this.add.text(entry.sprite.x, entry.sprite.y - 32, '!', {
                 fontFamily: 'monospace', fontSize: '20px', color: '#ffcc00',
                 stroke: '#000000', strokeThickness: 4
             }).setOrigin(0.5, 0.5).setDepth(30);

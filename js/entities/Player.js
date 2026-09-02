@@ -8,6 +8,9 @@ class Player {
         this.movingFor = 0;   // ms held in one go, used to break into a run
 
         this.monsters = [];
+        // Everything caught past a full team. Nothing is ever lost to a full
+        // team; you swap between the two from the menu.
+        this.ranch = [];
         this.currentMonsterIndex = 0;
         this.inventory = new Inventory();
         this.coins = CONFIG.STARTING_COINS;
@@ -30,7 +33,10 @@ class Player {
 
     createSprite(x, y) {
         this.sprite = this.scene.add.sprite(x, y, 'player', 0);
-        this.sprite.setOrigin(0.5, 0.5);
+        // The art stands taller than a tile, so the origin puts the feet
+        // where a tile-sized sprite's feet were rather than the middle of
+        // the figure - everything else still works in tile positions.
+        this.sprite.setOrigin(0.5, SpriteFactory.PERSON_ORIGIN_Y);
         this.sprite.setDepth(10);
         this.sprite.play('idle-down');
     }
@@ -150,20 +156,77 @@ class Player {
 
     healAll() {
         this.monsters.forEach(monster => monster.fullHeal());
+        this.ranch.forEach(monster => monster.fullHeal());
     }
 
     catchMonster(wild) {
         this.recordCaught(wild.name);
 
-        if (this.monsters.length >= CONFIG.MAX_MONSTERS_IN_TEAM) {
-            return { success: false, reason: 'Your team is full!' };
-        }
-
         wild.isWild = false;
         wild.resetBattleState();
+
+        if (this.monsters.length >= CONFIG.MAX_MONSTERS_IN_TEAM) {
+            if (this.ranch.length >= CONFIG.MAX_MONSTERS_IN_RANCH) {
+                return { success: false, reason: 'the ranch is full too!' };
+            }
+
+            this.ranch.push(wild);
+            return { success: true, monster: wild, stored: true };
+        }
+
         this.monsters.push(wild);
 
-        return { success: true, monster: wild };
+        return { success: true, monster: wild, stored: false };
+    }
+
+    // --- the ranch ----------------------------------------------------------
+
+    getRanch() {
+        return this.ranch;
+    }
+
+    // Move one monster from the ranch into the team. Fails on a full team,
+    // which is what the swap below is for.
+    withdrawMonster(index) {
+        const monster = this.ranch[index];
+        if (!monster) return false;
+        if (this.monsters.length >= CONFIG.MAX_MONSTERS_IN_TEAM) return false;
+
+        this.ranch.splice(index, 1);
+        this.monsters.push(monster);
+
+        return true;
+    }
+
+    // Move one monster from the team to the ranch. The last one stays: a
+    // team of nobody has no way back out of a lost battle.
+    depositMonster(index) {
+        const monster = this.monsters[index];
+        if (!monster) return false;
+        if (this.monsters.length <= 1) return false;
+        if (this.ranch.length >= CONFIG.MAX_MONSTERS_IN_RANCH) return false;
+
+        this.monsters.splice(index, 1);
+        this.ranch.push(monster);
+
+        if (this.currentMonsterIndex >= this.monsters.length) {
+            this.currentMonsterIndex = this.monsters.length - 1;
+        }
+
+        return true;
+    }
+
+    // Trade a team member for a ranch one in a single step, so a full team
+    // is never a reason you cannot bring something home.
+    swapWithRanch(teamIndex, ranchIndex) {
+        const mine = this.monsters[teamIndex];
+        const theirs = this.ranch[ranchIndex];
+        if (!mine || !theirs) return false;
+
+        this.monsters[teamIndex] = theirs;
+        this.ranch[ranchIndex] = mine;
+
+        return true;
     }
 
     // Move a monster up or down the team order. The first slot is the one
@@ -309,6 +372,7 @@ class Player {
             direction: this.direction,
             coins: this.coins,
             monsters: this.monsters.map(monster => monster.getSaveData()),
+            ranch: this.ranch.map(monster => monster.getSaveData()),
             currentMonsterIndex: this.currentMonsterIndex,
             inventory: this.inventory.getSaveData(),
             seen: [...this.seen],
@@ -325,6 +389,9 @@ class Player {
         if (Array.isArray(data.monsters) && data.monsters.length > 0) {
             this.monsters = data.monsters.map(monster => Monster.fromData(monster));
         }
+
+        // Saves written before the ranch existed simply have none
+        this.ranch = (data.ranch || []).map(monster => Monster.fromData(monster));
 
         this.currentMonsterIndex = Math.min(
             data.currentMonsterIndex || 0,
