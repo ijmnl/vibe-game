@@ -99,6 +99,12 @@
                     <div id="battle-team-list" class="scroll-list"></div>
                     <button id="team-back-btn" class="battle-btn wide">Back</button>
                 </div>
+
+                <div id="battle-result" class="battle-subpanel result-panel hidden">
+                    <h3 id="result-title">Victory!</h3>
+                    <div id="result-lines" class="result-lines"></div>
+                    <button id="result-continue-btn" class="battle-btn primary wide">Continue</button>
+                </div>
             </div>
         </div>
 
@@ -118,6 +124,7 @@
                 </div>
                 <div class="panel-actions">
                     <button id="dex-btn" class="battle-btn">Monsterdex</button>
+                    <button id="ranch-btn" class="battle-btn">Ranch</button>
                     <button id="mute-btn" class="battle-btn" aria-label="Sound">🔊</button>
                     <button id="close-menu-btn" class="battle-btn primary">Close</button>
                 </div>
@@ -133,6 +140,27 @@
                 <div id="shop-list" class="scroll-list tall"></div>
                 <div class="panel-actions">
                     <button id="close-shop-btn" class="battle-btn primary">Leave</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="ranch-ui" class="hidden">
+            <div class="menu-panel">
+                <div class="panel-head">
+                    <h2>Ranch</h2>
+                    <span class="muted" id="ranch-count">0 / 0</span>
+                </div>
+                <p id="ranch-hint" class="mentor-hint"></p>
+                <div class="menu-section">
+                    <h3>Your team</h3>
+                    <div id="ranch-team-list" class="monster-list"></div>
+                </div>
+                <div class="menu-section">
+                    <h3>At the ranch</h3>
+                    <div id="ranch-list" class="monster-list tall"></div>
+                </div>
+                <div class="panel-actions">
+                    <button id="close-ranch-btn" class="battle-btn primary">Close</button>
                 </div>
             </div>
         </div>

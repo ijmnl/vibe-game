@@ -579,6 +579,128 @@
                 return true;
             });
 
+            runTest('An evolution gets its new form\'s base stats', () => {
+                const grown = new Monster('Rat', 14);
+                grown.gainExp(grown.expToLevel);
+
+                if (grown.name !== 'Rattler') return `Rat did not evolve, it is a ${grown.name}`;
+
+                // The whole point of evolving: it has to match one caught
+                // at the same level, not stay on the old base line.
+                const caught = new Monster('Rattler', grown.level);
+                if (grown.maxHp !== caught.maxHp) {
+                    return `Evolved HP ${grown.maxHp} against ${caught.maxHp} for a caught one`;
+                }
+                if (grown.attack !== caught.attack) {
+                    return `Evolved attack ${grown.attack} against ${caught.attack}`;
+                }
+                return true;
+            });
+
+            runTest('An evolution picks up a second type when it has one', () => {
+                // No species evolves into a dual type yet, so check the field
+                // is refreshed rather than carried over from the old form
+                const monster = new Monster('Crab', 5);
+                if (monster.secondType !== 'Rock') return 'Crab is not Water/Rock to begin with';
+
+                monster.evolveInto('Slime');
+                if (monster.secondType !== null) return 'Kept Rock after becoming a Slime';
+                return true;
+            });
+
+            runTest('Catching past a full team boards it at the ranch', () => {
+                const player = Object.create(Player.prototype);
+                player.monsters = Array.from({ length: CONFIG.MAX_MONSTERS_IN_TEAM },
+                    () => new Monster('Slime', 5));
+                player.ranch = [];
+                player.currentMonsterIndex = 0;
+                player.seen = new Set();
+                player.caught = new Set();
+
+                const result = player.catchMonster(new Monster('Crab', 4, true));
+
+                if (!result.success) return `Catch was refused: ${result.reason}`;
+                if (!result.stored) return 'A seventh monster went into the team';
+                if (player.getRanch().length !== 1) return 'The ranch stayed empty';
+                if (player.caught.has('Crab') === false) return 'The dex did not record it';
+                return true;
+            });
+
+            runTest('Team and ranch trade places both ways', () => {
+                const player = Object.create(Player.prototype);
+                player.monsters = [new Monster('Slime', 5), new Monster('Rat', 5)];
+                player.ranch = [new Monster('Fox', 5)];
+                player.currentMonsterIndex = 0;
+
+                if (!player.withdrawMonster(0)) return 'Could not take Fox out of the ranch';
+                if (player.monsters.length !== 3 || player.ranch.length !== 0) {
+                    return 'Withdraw left the two lists inconsistent';
+                }
+
+                if (!player.depositMonster(0)) return 'Could not board Slime';
+                if (player.getRanch()[0].name !== 'Slime') return 'Slime is not at the ranch';
+
+                if (!player.swapWithRanch(0, 0)) return 'Swap was refused';
+                if (player.monsters[0].name !== 'Slime') return 'Slime did not come back';
+                if (player.getRanch()[0].name !== 'Rat') return 'Rat did not take its place';
+                return true;
+            });
+
+            runTest('The last team member cannot be boarded', () => {
+                const player = Object.create(Player.prototype);
+                player.monsters = [new Monster('Slime', 5)];
+                player.ranch = [];
+                player.currentMonsterIndex = 0;
+
+                if (player.depositMonster(0)) return 'Boarding the only monster was allowed';
+                return true;
+            });
+
+            runTest('A full ranch is the only thing that turns a catch away', () => {
+                const player = Object.create(Player.prototype);
+                player.monsters = Array.from({ length: CONFIG.MAX_MONSTERS_IN_TEAM },
+                    () => new Monster('Slime', 5));
+                player.ranch = Array.from({ length: CONFIG.MAX_MONSTERS_IN_RANCH },
+                    () => new Monster('Rat', 5));
+                player.currentMonsterIndex = 0;
+                player.seen = new Set();
+                player.caught = new Set();
+
+                const result = player.catchMonster(new Monster('Crab', 4, true));
+                if (result.success) return 'A catch got through a full team and a full ranch';
+                return true;
+            });
+
+            runTest('A save carries the ranch, and an old save without one loads', () => {
+                const scene = { add: { sprite: () => ({ setOrigin(){return this;}, setDepth(){return this;},
+                    play(){return this;}, anims: {}, setPosition(){return this;} }) }, map: {} };
+
+                const player = Object.create(Player.prototype);
+                player.scene = scene;
+                player.sprite = { x: 10, y: 20 };
+                player.direction = 'down';
+                player.coins = 5;
+                player.monsters = [new Monster('Slime', 5)];
+                player.ranch = [new Monster('Fox', 7)];
+                player.currentMonsterIndex = 0;
+                player.inventory = new Inventory();
+                player.seen = new Set(['Slime']);
+                player.caught = new Set(['Slime']);
+                player.playAnimation = () => {};
+
+                const saved = player.getSaveData();
+                if (!saved.ranch || saved.ranch[0].name !== 'Fox') return 'The ranch was not saved';
+
+                player.loadSaveData(saved);
+                if (player.getRanch()[0].name !== 'Fox') return 'The ranch did not come back';
+
+                // Saves written before the ranch existed have no such field
+                delete saved.ranch;
+                player.loadSaveData(saved);
+                if (player.getRanch().length !== 0) return 'An old save produced a phantom ranch';
+                return true;
+            });
+
             runTest('Route level bands climb along the route chain', () => {
                 const bands = ['route_1', 'route_2', 'route_3', 'ember_cave', 'dust_road']
                     .map(id => getMapDef(id).levels);

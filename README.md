@@ -40,6 +40,9 @@ A Pokémon-inspired HTML5 game built with Phaser.js and modern JavaScript.
 - **Towns that move**: the locals wander their patch instead of standing frozen
 - **24 monsters to collect**, each with a fixed type, its own pixel art, its own
   learnset, and several with evolutions - four of them only after dark
+- **A ranch behind the team**: your team holds six, and everything you catch past
+  that boards at the ranch rather than being lost. Swap between the two from the
+  menu, any time you are not mid-fight
 - **Turn-based battles with real choices**: pick from up to four moves, each
   with limited uses, work the type chart, land criticals, inflict burn, poison,
   paralysis and sleep. Speed decides who swings first, and priority moves cut
@@ -109,7 +112,9 @@ Phaser is vendored in `vendor/`, so the game also runs offline and from a
    NPCs give directions, hints, and occasionally a monster
 3. **Find monsters**: only the tall grass, rubble and scrub hide them. Stay on
    the path if you would rather not fight
-4. **Battle**:
+4. **Battle**: a win ends on a results panel - coins, EXP, and the level-up or
+   evolution spelled out - which waits for a tap when there is something to read
+   and clears itself when there is not
    - **Fight** - choose one of your monster's moves. Types matter: Water beats
      Fire and Rock, Grass beats Water and Rock, Fire beats Grass, Electric beats
      Water, Rock beats Fire and Electric. Normal is never resisted
@@ -118,15 +123,19 @@ Phaser is vendored in `vendor/`, so the game also runs offline and from a
      tap it, then pick a move. That move cannot miss, always crits, and hits
      almost twice as hard
    - **Throw Ball** - the weaker and more status-afflicted the target, the
-     better your odds. You cannot catch a trainer's monster
+     better your odds. You cannot catch a trainer's monster. With six already
+     in the team it still lands - it just boards at the ranch
    - **Bag** / **Team** - use an item, or switch monster
    - **Run** - works on wild monsters. Trainers will not let you leave
 5. **Towns**: the nurse restores your team's health *and* their move uses for
-   free; the shopkeeper sells potions and balls
+   free, the ranch included; the shopkeeper sells potions and balls
 6. **Team order**: the ★ in the menu leads the next battle. Use the arrows to
    move a monster up or down
-7. **Menu**: the MENU button, or ESC / M. Team, bag, Monsterdex, sound toggle.
-   The row of hearts under each monster is how close it is to you
+7. **Menu**: the MENU button, or ESC / M. Team, bag, Monsterdex, **Ranch**,
+   sound toggle. The row of hearts under each monster is how close it is to you
+   - **Ranch** holds everything past your six. With room in the team, tap anyone
+     there to bring them along; with a full team, tap one of yours first and then
+     one of theirs to trade places
 8. **The clock**: the corner of the screen shows the hour and the sky. Both
    change what you meet and how hard your moves land
 
@@ -154,6 +163,10 @@ Phaser is vendored in `vendor/`, so the game also runs offline and from a
 - The elder in a lesson loses nothing, so there is no reason not to teach.
   Bring a strong monster and a young one you actually want to use
 - Not every rustle in the grass is a fight. Some of them are worth stopping for
+- A full team is never a reason to walk past a monster. It goes to the ranch, and
+  you can trade it into the team from the menu whenever you like
+- An evolution is a real jump, not a new sprite: it takes on its new form's base
+  stats, so a Rattler that grew from a Rat matches one caught at the same level
 
 ## 📁 Project Structure
 
