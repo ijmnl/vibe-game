@@ -172,6 +172,8 @@ class WorldScene extends Phaser.Scene {
                 npc.y * CONFIG.TILE_SIZE + CONFIG.TILE_SIZE / 2,
                 npc.sprite || 'npc-elder'
             );
+            // Same footing as the player: taller than a tile, standing on it
+            sprite.setOrigin(0.5, SpriteFactory.PERSON_ORIGIN_Y);
             sprite.setDepth(9);
             this.npcSprites.push({ npc, sprite });
         });
@@ -690,7 +692,8 @@ class WorldScene extends Phaser.Scene {
 
         // "!" over their head, then they walk over
         if (entry) {
-            const mark = this.add.text(entry.sprite.x, entry.sprite.y - 22, '!', {
+            // Clear of the cap: the figure stands 40px tall on a 32px tile
+            const mark = this.add.text(entry.sprite.x, entry.sprite.y - 32, '!', {
                 fontFamily: 'monospace', fontSize: '20px', color: '#ffcc00',
                 stroke: '#000000', strokeThickness: 4
             }).setOrigin(0.5, 0.5).setDepth(30);

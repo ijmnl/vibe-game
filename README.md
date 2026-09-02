@@ -43,6 +43,10 @@ A Pokémon-inspired HTML5 game built with Phaser.js and modern JavaScript.
 - **A ranch behind the team**: your team holds six, and everything you catch past
   that boards at the ranch rather than being lost. Swap between the two from the
   menu, any time you are not mid-fight
+- **A cast drawn to the grain of the world**: every person is a 16x20 grid painted
+  two screen pixels to the drawn pixel, so a sleeve has the same grain as the grass
+  beside it. The player and the two who rival you wear a cap; the townsfolk do not,
+  which is how you pick yourself out of a crowded square
 - **Turn-based battles with real choices**: pick from up to four moves, each
   with limited uses, work the type chart, land criticals, inflict burn, poison,
   paralysis and sleep. Speed decides who swings first, and priority moves cut

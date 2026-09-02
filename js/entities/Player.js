@@ -33,7 +33,10 @@ class Player {
 
     createSprite(x, y) {
         this.sprite = this.scene.add.sprite(x, y, 'player', 0);
-        this.sprite.setOrigin(0.5, 0.5);
+        // The art stands taller than a tile, so the origin puts the feet
+        // where a tile-sized sprite's feet were rather than the middle of
+        // the figure - everything else still works in tile positions.
+        this.sprite.setOrigin(0.5, SpriteFactory.PERSON_ORIGIN_Y);
         this.sprite.setDepth(10);
         this.sprite.play('idle-down');
     }

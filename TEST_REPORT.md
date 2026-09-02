@@ -889,3 +889,56 @@ tegels overleven dat omdat hun detail grof is; de mensen, op één rastercel per
 beeldpunt, niet. De zoom wordt nu op hele getallen afgerond.
 
 85 tests, 0 gefaald.
+
+---
+
+# Ronde 4 — de poppetjes opnieuw getekend
+
+Stijl B gekozen: pet, riem, en een figuur die een kwart tegel boven de grond
+uitsteekt.
+
+## Waarom het raster grover moest
+
+De oude figuur stond op een raster van 32x32 met **één** beeldpunt per
+getekende pixel. De tegels eromheen hebben korrel van twee tot vier beeldpunten,
+dus het poppetje was fijner getekend dan de wereld waarin het stond — en las
+daardoor als een klein plaatje van een mens in plaats van als pixel art.
+
+Nu: **16 breed x 20 hoog, twee beeldpunten per getekende pixel**. Even breed als
+een tegel, en een kwart tegel hoger dan de grond waarop het staat. De textuur
+groeide van 32x32 naar 32x40 per frame.
+
+| | voor | na |
+|---|---|---|
+| Raster | 32 x 32 | 16 x 20 |
+| Beeldpunten per pixel | 1 | 2 |
+| Textuur per frame | 32 x 32 | 32 x 40 |
+| Kleuren in het figuur | 22 | 14 |
+
+## De voeten blijven staan waar ze stonden
+
+Het figuur is hoger dan een tegel, maar niets in het spel mocht daarvan weten.
+`PERSON_ORIGIN_Y = 0.6` zet het ankerpunt zo dat de voeten precies landen waar de
+onderkant van een tegelgroot poppetje lag. Botsingen, dieptesortering, spawnpunten
+en de wandelroutes van de dorpelingen zijn allemaal onveranderd; alleen het
+uitroepteken van een trainer moest tien pixels omhoog om boven de pet uit te komen.
+
+## Eén set tekeningen, met en zonder pet
+
+De pet zit in eigen paletsleuven (`p P Q`) in plaats van in de kleuren van het
+shirt. Een outfit met een `hat` krijgt daar de pet in; een outfit zonder krijgt er
+zijn eigen haarkleur in, waardoor dezelfde rijen als een volle haardos lezen. Zo
+tekenen negen rasters de hele cast: de speler, de rivaal en de trainers met pet,
+de 27 dorpelingen zonder. De riem heeft op dezelfde manier een eigen sleuf
+(`r R`), zodat hij niet meeverft met de broek.
+
+## Twaalf frames
+
+Vier richtingen x drie frames (staan, passen, sluiten), waarvan `right` een
+spiegeling van `left` is. De zijaanzichten zijn echt profiel getekend — smaller
+hoofd, klep naar voren, haar aan de achterkant, één oog — in plaats van het
+vooraanzicht met de ogen verschoven. Het extra beenwerk paste doordat er een
+romprij is samengevoegd; drie rijen been maken een pas leesbaar waar twee dat
+niet deden.
+
+89 tests, 0 gefaald.
