@@ -252,29 +252,36 @@ For production, you might want to:
 
 ## 🎨 Graphics
 
-Every sprite is drawn at runtime by `js/utils/SpriteFactory.js`. Characters are
-described as 16x16 grids of single letters and scaled up, which keeps the art
-chunky and crisp instead of blurry:
+Every sprite is drawn at runtime by `js/utils/SpriteFactory.js`. Everything -
+all 24 monsters, the player, every townsperson - is a 32x32 grid of single
+letters, one letter per pixel, painted into a canvas texture at boot:
 
 ```
-'.....kkkkkk.....'   k = outline, c = cap, s = skin,
-'....kCCCCCCk....'   j = jacket, p = trousers, '.' = transparent
+'..........ohheeHIeehho..........'   o = outline, h H I = hair,
+'..........ohcCCDDDDcho..........'   c C D = skin, e = eye,
+'........o22122211111255o........'   5 2 1 3 6 = shirt, dark to light
 ```
 
-Monsters share a handful of body shapes (blob, quadruped, winged, serpent,
-arachnid, shelled, moth, prowler, ...) recoloured per species, so adding a
-monster means adding a colour ramp and picking a shape.
+The grids are generated rather than typed. `tools/art.py` describes a body as
+a union of ellipses and polygons, measures how deep each pixel sits inside
+that body, and lights it off that depth - so an ear rounds like an ear, a tail
+does not black out for being thin, and a species and the thing it evolves into
+come out lit identically. `tools/creatures.py` holds the body plans (quadruped,
+flyer, serpent, arachnid, finned, crustacean, shelled, boulder, titan) and
+`tools/person.py` the player and the townsfolk.
 
-Slime, Oozer and Fox have been redrawn at 32x32 with a proper tone ramp - an
-outline, five body tones, a specular highlight, pale markings and an eye with
-a catchlight. Those grids are generated rather than typed: `tools/art.py`
-describes a creature as a union of ellipses and polygons, measures how deep
-each pixel sits inside the body, and lights it off that, so an ear rounds like
-an ear and a species and its evolution come out lit identically. The painter
-sizes each texture from its own grid, so the remaining species keep working on
-the older 16x16 art until they are redrawn too. Characters get a soft
-ellipse baked in behind them with `destination-over`, so every person in the
-world casts a shadow without a single extra game object.
+People needed two things the monsters did not. Materials: the same shading
+remapped onto parallel letter sets, so a shirt, a face, a boot and a head of
+hair all turn with one light. And a lift up the tone ramp, because a person is
+a stack of parts none of which is more than seven pixels across, and without it
+every part shades as an edge and the figure comes out in the two darkest tones.
+Cloth also caps the top of its ramp: at full range the lit middle of a torso
+lands as a pale patch in the belly and reads as an apron rather than a shirt.
+
+NPCs are the player's front-facing frame in someone else's clothes, which is
+what keeps the whole cast looking like one cast. Characters get a soft ellipse
+baked in behind them with `destination-over`, so every person in the world
+casts a shadow without a single extra game object.
 
 The world tileset is baked once into a single texture and drawn as one culled
 tilemap layer. Each tile is drawn rather than filled: grass grows blades, trees
@@ -286,8 +293,13 @@ flat 32px square reads as plastic.
 Battles are composed rather than tinted: a banded sky, a line of distant
 scenery that changes with the zone - hills, a treeline, open water, dunes, or
 stalactites coming down from a cave roof - a horizon, and ground that recedes.
-It is laid out around the battle panel, so the horizon lands in the strip you
-can actually see rather than behind the buttons.
+The scenery stands in two ranges, a hazier one behind a solid one, and
+everything on the horizon carries a rim of light down its lit side, because a
+single row of shapes in one colour merges into one lump. The fighters stand on
+that ground - the far one just past the horizon, the near one in the
+foreground - each on a tight shadow inside a faint halo. It is all laid out
+around the battle panel, so the horizon lands in the strip you can actually see
+rather than behind the buttons.
 
 ## 🎵 Audio
 

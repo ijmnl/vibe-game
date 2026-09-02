@@ -746,3 +746,83 @@ gegeven (Slime Lv.6 met twee aanvallen kwam terug als Lv.12 met vier, Pyrefox
 raakte niets kwijt), opgeslagen en herladen. Geen enkele consolefout.
 
 78 tests, 0 gefaald.
+
+---
+
+# Ronde: de rest van de tekeningen
+
+## Wat er nog niet klopte
+
+De 24 monsters waren opnieuw getekend op 32x32, en daarna waren de mensen het
+zwakste dat er nog in stond: acht regels met de hand getypte letters, met een
+plat blok huidskleur als gezicht. Naast de nieuwe monsters lazen ze als een
+tijdelijke tekening die iemand vergeten was te vervangen.
+
+Verder viel er in het spel zelf nog drie dingen op die plat waren, en één dat
+op de verkeerde plek stond.
+
+## De mensen
+
+Nu op dezelfde manier gemaakt als de monsters: beschreven als een stapel
+vormen en belicht met één licht. Ze worden geschilderd op één rastercel per
+beeldpunt, dus de lopende figuur is precies even groot op het scherm als altijd
+en heeft alleen vier keer zo veel detail.
+
+Twee dingen die de monsters niet nodig hadden:
+
+- **Materialen.** Dezelfde belichting doorvertaald naar parallelle
+  letterreeksen, zodat een hemd, een gezicht, een laars en een bos haar
+  allemaal met hetzelfde licht meedraaien.
+- **Optillen.** Een monster is één grote massa en vindt het midden van de
+  toonladder vanzelf. Een mens is een stapel onderdelen waarvan er geen enkele
+  breder is dan zeven beeldpunten, dus zonder de hele figuur op te tillen
+  schaduwt elk onderdeel als een rand en komt de figuur alleen in de twee
+  donkerste tonen uit.
+
+Stof moest bovendien zijn hoogtepunten afgetopt krijgen: over de volle ladder
+komt het verlichte midden van een romp uit als één ronde lichte vlek op de buik,
+en dat leest als een schort in plaats van als een hemd.
+
+De dorpelingen zijn hetzelfde figuur in andermans kleren, wat de hele bezetting
+er als één bezetting uit laat zien.
+
+## De bestrating
+
+Wisselde een lichte en een donkere tegel af op een dambordpatroon dat
+meedraaide met de tegelvariant. Op één tegel is dat een geplaveid pleintje, over
+een heel dorp is het een schaakbord. Elke steen krijgt nu een eigen kleine toon.
+
+## De gevechtsachtergrond
+
+De horizon was een rij identieke ellipsen in één kleur, wat tot één klomp
+samensmelt. Er staan nu twee reeksen — een wazigere achter een massieve — en
+alles op de horizon krijgt een randje licht aan de belichte kant: heuvels,
+boomkruinen en de druipstenen in de grotten. Dorpen krijgen een bomenrij in
+plaats van de modderbruine heuvels die ze hadden.
+
+De grond was zes bleke ellipsen willekeurig over de middenafstand verspreid, wat
+las als vlekken op de vloer. Ze beginnen nu klein en vaag bij de horizon en
+groeien naar de camera toe, en ze nemen hun toon over van de vloer waar ze op
+liggen — donkerder op zand, lichter in een grot, waar mengen naar zwart ze
+onzichtbaar maakte.
+
+En de verre vechter stond in de lucht. Allebei de vechters werden gecentreerd in
+de zichtbare strook, waardoor de tegenstander — en de schaduw eronder — ruim
+boven de horizon terechtkwam. Hij staat nu op de grond net voorbij de horizon,
+met de dichtstbijzijnde in de voorgrond. Zijn schaduw is twee ellipsen in plaats
+van één, een strakke kern in een vage halo, want één platte ellips leest als een
+plas op de vloer.
+
+## Prestaties
+
+| Telefoon | wereld | gevecht |
+|---|---|---|
+| iPhone 13 | 60 fps | 58 fps |
+| Pixel 5 | 60 fps | 60 fps |
+| Galaxy S9+ | 60 fps | 60 fps |
+
+Onveranderd: alle texturen worden één keer bij het opstarten gebakken, en de
+mensen worden op één rastercel per beeldpunt geschilderd, dus de speler en de
+dorpelingen kosten precies evenveel als voorheen.
+
+78 tests, 0 gefaald.
