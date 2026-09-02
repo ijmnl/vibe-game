@@ -587,16 +587,23 @@ const TileTextures = {
                 const sx = x + col * half;
                 const sy = y + row * half;
 
-                ctx.fillStyle = (row + col + variant) % 2
-                    ? 'rgba(255, 255, 255, 0.07)'
-                    : 'rgba(0, 0, 0, 0.05)';
+                // Every slab gets a tone of its own. This used to alternate
+                // light and dark on a checker that flipped with the variant,
+                // which is fine on one tile and, across a whole town square,
+                // is a chessboard.
+                const tone = this.noise(row * 2 + col, variant * 17 + 3) - 0.5;
+                ctx.fillStyle = tone > 0
+                    ? `rgba(255, 255, 255, ${(0.02 + tone * 0.10).toFixed(3)})`
+                    : `rgba(0, 0, 0, ${(0.02 - tone * 0.09).toFixed(3)})`;
                 ctx.fillRect(sx, sy, half, half);
 
-                ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+                // Mortar between the slabs, and a lit top edge so each one
+                // sits slightly proud of the one behind it
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.17)';
                 ctx.lineWidth = 1;
                 ctx.strokeRect(sx + 0.5, sy + 0.5, half - 1, half - 1);
 
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
                 ctx.fillRect(sx + 1, sy + 1, half - 2, 1);
             }
         }

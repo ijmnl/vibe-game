@@ -106,7 +106,7 @@ class BattleScene extends Phaser.Scene {
         SAND:    { sky: [0xffc46a, 0xffeccc], ground: [0xe8cb96, 0xb08a4e],
                    far: 0xc9a86a, silhouette: 'dunes', detail: 0x9a6a3a },
         VILLAGE: { sky: [0x8ec6f0, 0xdceaf8], ground: [0xc9b79a, 0x9a8570],
-                   far: 0x8a6a4a, silhouette: 'hills', detail: 0x8a6a4a }
+                   far: 0x3f7a46, silhouette: 'trees', detail: 0xa08d78 }
     };
 
     // Where the ground starts, as a fraction of the visible strip
@@ -163,11 +163,23 @@ class BattleScene extends Phaser.Scene {
     paintSilhouette(scheme, horizon) {
         const { width } = this.scale;
 
+        // Distance washes a colour out toward the sky, and everything catches
+        // the light on the same side. Both are wanted by every silhouette.
+        const haze = this.mix(scheme.far, scheme.sky[1], 0.42);
+        const lit = this.mix(scheme.far, 0xffffff, 0.18);
+
         if (scheme.silhouette === 'spikes') {
             // Stalactites hanging from the ceiling instead of a skyline
             for (let i = 0; i < 7; i++) {
                 const x = (width / 7) * i + width / 14;
                 const drop = Phaser.Math.Between(18, 52);
+
+                // A rim of light down the lit side, the same trick the hills
+                // and the treeline use: the whole spike two pixels wider,
+                // with the spike itself drawn over it.
+                this.backdrop.add(this.add.triangle(
+                    x, 0, -16, 0, 14, 0, -1, drop + 2, lit
+                ).setOrigin(0, 0));
                 this.backdrop.add(this.add.triangle(
                     x, 0, -14, 0, 14, 0, 0, drop, scheme.far
                 ).setOrigin(0, 0));
@@ -190,23 +202,55 @@ class BattleScene extends Phaser.Scene {
         }
 
         if (scheme.silhouette === 'trees') {
+            const bark = this.mix(scheme.far, 0x000000, 0.38);
+
+            // A hazier row standing behind, so the wood has a back to it
+            for (let i = 0; i < 11; i++) {
+                const x = (width / 10) * i + Phaser.Math.Between(-12, 12);
+                const tall = Phaser.Math.Between(24, 42);
+
+                this.backdrop.add(this.add.ellipse(
+                    x, horizon - tall,
+                    Phaser.Math.Between(30, 46), Phaser.Math.Between(26, 38), haze
+                ));
+            }
+
             for (let i = 0; i < 9; i++) {
                 const x = (width / 9) * i + Phaser.Math.Between(-10, 10);
                 const tall = Phaser.Math.Between(30, 58);
-                this.backdrop.add(this.add.rectangle(x, horizon, 6, tall, scheme.far).setOrigin(0.5, 1));
-                this.backdrop.add(this.add.ellipse(x, horizon - tall, 34, 30, scheme.far));
+                const crown = Phaser.Math.Between(30, 46);
+
+                this.backdrop.add(this.add.rectangle(x, horizon, 6, tall, bark).setOrigin(0.5, 1));
+                this.backdrop.add(this.add.ellipse(x, horizon - tall, crown, crown * 0.86, lit));
+                this.backdrop.add(this.add.ellipse(
+                    x, horizon - tall + 4, crown - 7, crown * 0.86 - 7, scheme.far
+                ));
             }
             return;
         }
 
+        // Two ranges. One row of identical ellipses in a single colour merges
+        // into one lump on the horizon; a hazier range standing behind a solid
+        // one is what gives a skyline any depth at all.
         const rounded = scheme.silhouette === 'dunes';
+
+        for (let i = 0; i < 5; i++) {
+            const x = (width / 4) * i - width / 8;
+            const rise = Phaser.Math.Between(34, 64);
+
+            this.backdrop.add(this.add.ellipse(x, horizon, width * 0.52, rise * 2, haze));
+        }
+
         for (let i = 0; i < 4; i++) {
             const x = (width / 3) * i - width / 6;
-            const rise = Phaser.Math.Between(26, 54);
+            const rise = Phaser.Math.Between(22, 46);
+            const span = width * (rounded ? 0.6 : 0.45);
 
-            this.backdrop.add(this.add.ellipse(
-                x, horizon, width * (rounded ? 0.6 : 0.45), rise * 2, scheme.far
-            ));
+            // The lit hill first, then the same hill in the base colour a few
+            // pixels lower: what is left showing along the top is a rim of
+            // light, and the hill stops being a cut-out.
+            this.backdrop.add(this.add.ellipse(x, horizon, span, rise * 2, lit));
+            this.backdrop.add(this.add.ellipse(x, horizon + 4, span - 8, rise * 2 - 8, scheme.far));
         }
     }
 
@@ -215,16 +259,29 @@ class BattleScene extends Phaser.Scene {
         const width = this.scale.width;
         const bottom = this.visibleHeight();
 
-        if (bottom - horizon < 40) return;
+        const span = bottom - horizon;
+        if (span < 40) return;
 
-        for (let i = 0; i < 6; i++) {
+        // Ground cover along the near side. Six pale ellipses scattered at
+        // random over the middle distance read as spills on the floor; these
+        // start small and faint at the horizon and grow toward the camera,
+        // which is what makes a flat band of colour read as ground receding.
+        // Darker than the floor where the floor is pale, lighter where it is
+        // dark: mixing toward black either way makes the cave floor's mottling
+        // disappear into it entirely.
+        const shade = scheme.ground[1];
+        const gloomy = (((shade >> 16) & 0xff) + ((shade >> 8) & 0xff) + (shade & 0xff)) / 3 < 96;
+        const tint = this.mix(scheme.detail, gloomy ? 0xffffff : 0x000000, 0.18);
+
+        for (let i = 0; i < 14; i++) {
+            const depth = Math.pow((i + 0.5) / 14, 0.7);
             const x = Phaser.Math.Between(0, width);
-            const y = Phaser.Math.Between(horizon + 20, bottom - 6);
-            const size = Phaser.Math.Between(14, 40);
+            const y = horizon + 10 + depth * (span - 18);
+            const size = 6 + depth * 26;
 
-            const shape = this.add.ellipse(x, y, size, size * 0.32, scheme.detail);
-            shape.setAlpha(0.32);
-            this.backdrop.add(shape);
+            const patch = this.add.ellipse(x, y, size, size * 0.3, tint);
+            patch.setAlpha(0.12 + depth * 0.16);
+            this.backdrop.add(patch);
         }
     }
 
@@ -239,8 +296,13 @@ class BattleScene extends Phaser.Scene {
     }
 
     createMonsterView(monster) {
-        // A platform under each combatant so they do not float in the void
-        const platform = this.add.ellipse(0, 0, 10, 4, 0x000000, 0.28);
+        // A shadow under each combatant so they do not float in the void.
+        // Two of them: a tight dark core where the body meets the ground and a
+        // wider faint one around it. One flat ellipse at a single alpha reads
+        // as a puddle painted on the floor.
+        const halo = this.add.ellipse(0, 0, 10, 4, 0x000000, 0.12);
+        halo.setDepth(18);
+        const platform = this.add.ellipse(0, 0, 10, 4, 0x000000, 0.22);
         platform.setDepth(19);
 
         const sprite = this.add.image(0, 0, monster.getSpriteKey());
@@ -256,7 +318,7 @@ class BattleScene extends Phaser.Scene {
         label.setOrigin(0.5, 0.5);
         label.setDepth(25);
 
-        return { sprite, label, platform, monster };
+        return { sprite, label, platform, halo, monster };
     }
 
     createMonsterViews() {
@@ -279,6 +341,7 @@ class BattleScene extends Phaser.Scene {
         view.sprite.destroy();
         view.label.destroy();
         view.platform.destroy();
+        view.halo.destroy();
     }
 
     positionMonsters() {
@@ -301,10 +364,23 @@ class BattleScene extends Phaser.Scene {
         const size = Phaser.Math.Clamp(available / 3.4, 26, 96);
         const labelRoom = size * 0.42;
         const rowHeight = size + labelRoom;
-        const top = Math.max(labelRoom, (available - rowHeight * 2) / 2 + labelRoom);
+        const enemyY = this.farCombatantY(available, size, labelRoom, rowHeight);
 
-        this.placeView(this.enemyView, centerX + this.scale.width * 0.19, top + size / 2, size, labelRoom);
-        this.placeView(this.playerView, centerX - this.scale.width * 0.19, top + rowHeight + size / 2, size, labelRoom);
+        this.placeView(this.enemyView, centerX + this.scale.width * 0.19, enemyY, size, labelRoom);
+        this.placeView(this.playerView, centerX - this.scale.width * 0.19, enemyY + rowHeight, size, labelRoom);
+    }
+
+    // The far combatant belongs on the ground just over the horizon. Centring
+    // the pair in the strip instead put it - and the shadow under it - up in
+    // the sky, which is where the shadow was most obviously wrong.
+    farCombatantY(available, size, labelRoom, rowHeight) {
+        const horizon = this.visibleHeight() * BattleScene.HORIZON;
+
+        return Phaser.Math.Clamp(
+            horizon - size * 0.30,
+            labelRoom + size / 2,
+            Math.max(labelRoom + size / 2, available - rowHeight - size / 2)
+        );
     }
 
     layoutBeside(columnWidth) {
@@ -314,10 +390,10 @@ class BattleScene extends Phaser.Scene {
         const size = Phaser.Math.Clamp(Math.min(columnWidth / 2.8, available / 3.4), 26, 96);
         const labelRoom = size * 0.42;
         const rowHeight = size + labelRoom;
-        const top = Math.max(labelRoom, (available - rowHeight * 2) / 2 + labelRoom);
+        const enemyY = this.farCombatantY(available, size, labelRoom, rowHeight);
 
-        this.placeView(this.enemyView, centerX + columnWidth * 0.18, top + size / 2, size, labelRoom);
-        this.placeView(this.playerView, centerX - columnWidth * 0.18, top + rowHeight + size / 2, size, labelRoom);
+        this.placeView(this.enemyView, centerX + columnWidth * 0.18, enemyY, size, labelRoom);
+        this.placeView(this.playerView, centerX - columnWidth * 0.18, enemyY + rowHeight, size, labelRoom);
     }
 
     // The panel's top and left edges, in game (canvas) coordinates
@@ -342,7 +418,9 @@ class BattleScene extends Phaser.Scene {
         view.sprite.setDisplaySize(size, size);
 
         view.platform.setPosition(x, y + size * 0.46);
-        view.platform.setSize(size * 0.95, size * 0.28);
+        view.platform.setSize(size * 0.62, size * 0.17);
+        view.halo.setPosition(x, y + size * 0.46);
+        view.halo.setSize(size * 0.92, size * 0.26);
 
         view.label.setFontSize(Math.max(9, Math.round(size * 0.17)));
         view.label.setPosition(x, y - size / 2 - labelRoom / 2);
